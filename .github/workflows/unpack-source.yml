@@ -1,0 +1,48 @@
+name: Unpack Limbo source archive
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/unpack-source.yml"
+permissions:
+  contents: write
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Safely extract source archive
+        run: |
+          python3 - <<'PY'
+          from pathlib import PurePosixPath
+          from zipfile import ZipFile
+          from pathlib import Path
+          archive = Path("limbo.zip")
+          if not archive.is_file():
+              raise SystemExit("limbo.zip not found at repository root")
+          dest = Path("source")
+          dest.mkdir(exist_ok=True)
+          with ZipFile(archive) as zf:
+              bad = []
+              for info in zf.infolist():
+                  p = PurePosixPath(info.filename)
+                  if p.is_absolute() or ".." in p.parts or (p.parts and ":" in p.parts[0]):
+                      bad.append(info.filename)
+              if bad:
+                  raise SystemExit("Unsafe archive paths: " + repr(bad[:10]))
+              zf.extractall(dest)
+          print("Extracted archive entries:", len(ZipFile(archive).infolist()))
+          PY
+      - name: Commit extracted source tree
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add source/
+          if git diff --cached --quiet; then
+            echo "No extracted files to commit."
+            exit 0
+          fi
+          git commit -m "Extract Limbo source archive for maintenance"
+          git push origin HEAD:main
