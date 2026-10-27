@@ -176,6 +176,10 @@ public class LimboActivity extends AppCompatActivity
     private ImageButton mPause;
     private ImageButton mStop;
     private ImageButton mRestart;
+    private ImageButton mFirmware;
+    private ImageButton mGraphics;
+    private ImageButton mHostCpu;
+    private ImageButton mMemory;
 
     //sections
     private LinearLayout mCPUSectionDetails;
@@ -1102,6 +1106,207 @@ public class LimboActivity extends AppCompatActivity
                 onRestartButton();
             }
         });
+        mFirmware.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                showFirmwareDialog();
+            }
+        });
+        mGraphics.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                showGraphicsBackendDialog();
+            }
+        });
+        mHostCpu.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                showHostCpuAffinityDialog();
+            }
+        });
+        mMemory.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                showRamOptimizationDialog();
+            }
+        });
+    }
+
+    private void showFirmwareDialog() {
+        final String[] choices = new String[] {
+                "SeaBIOS (default)",
+                "UEFI / OVMF (x86_64)"
+        };
+        int selected = RuntimeOptions.FIRMWARE_UEFI.equals(
+                RuntimeOptions.getFirmware(this)) ? 1 : 0;
+
+        new AlertDialog.Builder(this)
+                .setTitle("Firmware mesin virtual")
+                .setSingleChoiceItems(choices, selected, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        if (which == 0) {
+                            RuntimeOptions.setFirmware(LimboActivity.this, RuntimeOptions.FIRMWARE_SEABIOS);
+                            ToastUtils.toastShort(LimboActivity.this, "SeaBIOS dipilih. Berlaku pada boot berikutnya.");
+                            dialog.dismiss();
+                            return;
+                        }
+
+                        if (LimboApplication.arch != Config.Arch.x86_64) {
+                            ToastUtils.toastLong(LimboActivity.this,
+                                    "Firmware OVMF yang disertakan adalah x86_64. Paket emulator ini bukan x86_64.");
+                            return;
+                        }
+
+                        // Ensure bundled ROM assets have been copied into Limbo's private base directory.
+                        FileInstaller.installFiles(LimboActivity.this, false);
+                        File code = new File(LimboApplication.getBasefileDir(), "OVMF_CODE.fd");
+                        File vars = new File(LimboApplication.getBasefileDir(), "OVMF_VARS.fd");
+                        if (!code.isFile() || !vars.isFile()) {
+                            new AlertDialog.Builder(LimboActivity.this)
+                                    .setTitle("OVMF belum tersedia")
+                                    .setMessage("Build ini belum memuat OVMF_CODE.fd dan OVMF_VARS.fd. SeaBIOS tetap aktif. Firmware UEFI akan tersedia setelah aset OVMF dimasukkan ke APK.")
+                                    .setPositiveButton(android.R.string.ok, null)
+                                    .show();
+                            return;
+                        }
+
+                        RuntimeOptions.setFirmware(LimboActivity.this, RuntimeOptions.FIRMWARE_UEFI);
+                        ToastUtils.toastShort(LimboActivity.this, "UEFI/OVMF dipilih. Berlaku pada boot berikutnya.");
+                        dialog.dismiss();
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void showGraphicsBackendDialog() {
+        final String[] choices = new String[] {
+                "Otomatis (kompatibilitas)",
+                "Software / paling kompatibel",
+                "OpenGL guest GPU (belum tersedia di native build)",
+                "Vulkan guest GPU (belum tersedia di native build)"
+        };
+        String backend = RuntimeOptions.getGraphicsBackend(this);
+        int selected = RuntimeOptions.GRAPHICS_SOFTWARE.equals(backend) ? 1 : 0;
+
+        new AlertDialog.Builder(this)
+                .setTitle("Backend grafis guest")
+                .setSingleChoiceItems(choices, selected, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        if (which == 2 || which == 3) {
+                            String message = "Opsi ini belum bisa diaktifkan dengan aman: konfigurasi native Limbo saat ini menonaktifkan QEMU OpenGL dan belum menautkan virglrenderer/rutabaga untuk rendering GPU di dalam guest. Mendeteksi OpenGL/Vulkan Android saja tidak cukup. Pilihan tidak diubah.";
+                            new AlertDialog.Builder(LimboActivity.this)
+                                    .setTitle("Akselerasi guest belum terbangun")
+                                    .setMessage(message)
+                                    .setPositiveButton(android.R.string.ok, null)
+                                    .show();
+                            return;
+                        }
+                        RuntimeOptions.setGraphicsBackend(LimboActivity.this,
+                                which == 1 ? RuntimeOptions.GRAPHICS_SOFTWARE : RuntimeOptions.GRAPHICS_AUTO);
+                        ToastUtils.toastShort(LimboActivity.this,
+                                which == 1 ? "Mode kompatibilitas dipilih." : "Backend otomatis dipilih.");
+                        dialog.dismiss();
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void showHostCpuAffinityDialog() {
+        final int[] cpuIds = RuntimeOptions.getAvailableHostCpuIds();
+        if (cpuIds.length == 0) {
+            ToastUtils.toastShort(this, "Daftar core host tidak dapat dibaca; semua core tetap digunakan.");
+            return;
+        }
+
+        final String[] labels = new String[cpuIds.length];
+        final boolean[] checked = new boolean[cpuIds.length];
+        int[] current = RuntimeOptions.getHostCpuIds(this);
+        for (int i = 0; i < cpuIds.length; i++) {
+            labels[i] = "Core host " + cpuIds[i];
+            checked[i] = current == null;
+            if (current != null) {
+                for (int j = 0; j < current.length; j++) {
+                    if (current[j] == cpuIds[i]) checked[i] = true;
+                }
+            }
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Afinitas CPU host")
+                .setMessage("Ini memilih core CPU Android yang boleh dipakai thread QEMU. Jumlah vCPU guest di bagian Board tetap merupakan pengaturan terpisah. Berlaku saat VM dimulai berikutnya.")
+                .setMultiChoiceItems(labels, checked, new DialogInterface.OnMultiChoiceClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int which, boolean isChecked) {
+                        checked[which] = isChecked;
+                    }
+                })
+                .setPositiveButton("Simpan", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int which) {
+                        ArrayList<Integer> selected = new ArrayList<>();
+                        for (int i = 0; i < cpuIds.length; i++) {
+                            if (checked[i]) selected.add(cpuIds[i]);
+                        }
+                        if (selected.size() == 0 || selected.size() == cpuIds.length) {
+                            RuntimeOptions.setHostCpuIds(LimboActivity.this, null);
+                            ToastUtils.toastShort(LimboActivity.this,
+                                    selected.size() == 0 ? "Tidak ada core dipilih; kembali memakai semua core." :
+                                            "Afinitas dihapus; semua core host yang diizinkan dapat digunakan.");
+                        } else {
+                            int[] chosen = new int[selected.size()];
+                            for (int i = 0; i < selected.size(); i++) chosen[i] = selected.get(i);
+                            RuntimeOptions.setHostCpuIds(LimboActivity.this, chosen);
+                            ToastUtils.toastShort(LimboActivity.this, "Afinitas CPU disimpan untuk boot berikutnya.");
+                        }
+                    }
+                })
+                .setNeutralButton("Semua core", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int which) {
+                        RuntimeOptions.setHostCpuIds(LimboActivity.this, null);
+                        ToastUtils.toastShort(LimboActivity.this, "Semua core host diizinkan untuk boot berikutnya.");
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .create();
+        dialog.show();
+    }
+
+    private void showRamOptimizationDialog() {
+        if (getMachine() == null) {
+            ToastUtils.toastShort(this, "Pilih atau buat mesin virtual terlebih dahulu.");
+            return;
+        }
+        final int recommended = RuntimeOptions.getRecommendedGuestRamMb(this);
+        String current = mRamSize.getSelectedItem() == null ? "?" : mRamSize.getSelectedItem().toString();
+        new AlertDialog.Builder(this)
+                .setTitle("Optimasi RAM guest")
+                .setMessage("RAM guest saat ini: " + current + " MB.\nRekomendasi konservatif berdasarkan RAM fisik dan memori bebas host: sekitar " + recommended + " MB. Ini menyisakan ruang untuk Android, QEMU, dan aplikasi lain.")
+                .setPositiveButton("Terapkan rekomendasi", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        int bestPosition = 0;
+                        int bestValue = Integer.MAX_VALUE;
+                        android.widget.SpinnerAdapter adapter = mRamSize.getAdapter();
+                        for (int i = 0; i < adapter.getCount(); i++) {
+                            try {
+                                int value = Integer.parseInt(adapter.getItem(i).toString());
+                                if (value <= recommended && recommended - value < bestValue) {
+                                    bestValue = recommended - value;
+                                    bestPosition = i;
+                                }
+                            } catch (Exception ignored) { }
+                        }
+                        mRamSize.setSelection(bestPosition);
+                        ToastUtils.toastShort(LimboActivity.this, "Rekomendasi RAM diterapkan ke konfigurasi VM.");
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
     }
 
     private void onPauseButton() {
@@ -1570,6 +1775,10 @@ public class LimboActivity extends AppCompatActivity
         mPause = findViewById(R.id.pausevm);
         mStop = findViewById(R.id.stopvm);
         mRestart = findViewById(R.id.restartvm);
+        mFirmware = findViewById(R.id.firmwarevm);
+        mGraphics = findViewById(R.id.graphicsvm);
+        mHostCpu = findViewById(R.id.hostcpuvm);
+        mMemory = findViewById(R.id.memoryvm);
 
         //Machine
         mMachine = findViewById(R.id.machineval);
