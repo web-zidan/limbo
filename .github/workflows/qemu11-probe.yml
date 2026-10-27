@@ -1,0 +1,39 @@
+name: Probe QEMU 11.1.2 compatibility
+on:
+  push:
+    branches:
+      - limbo-qemu11-probe
+    paths:
+      - ".github/workflows/qemu11-probe.yml"
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download official QEMU source and test existing Limbo patch
+        shell: bash
+        run: |
+          set -u
+          curl -fL --retry 3 https://download.qemu.org/qemu-11.1.2.tar.xz -o /tmp/qemu-11.1.2.tar.xz
+          tar -xJf /tmp/qemu-11.1.2.tar.xz -C /tmp
+          PATCH="$GITHUB_WORKSPACE/source/limbo code/limbo-android-lib/src/main/jni/patches/qemu-5.1.0.patch"
+          echo "Official QEMU source: 11.1.2"
+          echo "Source size: $(du -sh /tmp/qemu-11.1.2 | cut -f1)"
+          echo "Build system markers:"
+          for f in configure meson.build Makefile.target accel/kvm/kvm-all.c audio/audio.c; do
+            if test -f "/tmp/qemu-11.1.2/$f"; then echo "present: $f"; else echo "missing: $f"; fi
+          done
+          set +e
+          patch --dry-run -d /tmp/qemu-11.1.2 -p1 < "$PATCH" > /tmp/patch-check.log 2>&1
+          rc=$?
+          set -e
+          echo "Existing 5.1.0 Limbo patch dry-run exit: $rc"
+          echo "First patch diagnostics:"
+          sed -n '1,180p' /tmp/patch-check.log
+          echo "Patch diagnostics summary:"
+          grep -E "FAILED|can't find file|Hunk|malformed|No file to patch" /tmp/patch-check.log | head -120 || true
+          echo "QEMU 11.1 source tree is downloaded under /tmp for this probe only; no code was changed."
+          exit 0
