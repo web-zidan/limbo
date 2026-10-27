@@ -25,6 +25,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sched.h>
 #include <dlfcn.h>
 #include <unwind.h>
 #include <dlfcn.h>
@@ -97,6 +98,51 @@ void set_qemu_var(JNIEnv* env, jobject thiz, const char * var, jint jvalue){
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *pvt) {
 	return JNI_VERSION_1_2;
+}
+
+JNIEXPORT jboolean JNICALL Java_com_max2idea_android_limbo_jni_VMExecutor_nativeSetHostCpuAffinity(
+        JNIEnv* env, jobject thiz, jintArray cpu_ids) {
+    if (cpu_ids == NULL) {
+        return JNI_TRUE;
+    }
+
+    jsize count = (*env)->GetArrayLength(env, cpu_ids);
+    if (count <= 0) {
+        return JNI_TRUE;
+    }
+
+    cpu_set_t cpu_mask;
+    CPU_ZERO(&cpu_mask);
+    jint *ids = (*env)->GetIntArrayElements(env, cpu_ids, NULL);
+    if (ids == NULL) {
+        return JNI_FALSE;
+    }
+
+    int valid_count = 0;
+    for (jsize i = 0; i < count; i++) {
+        jint cpu = ids[i];
+        if (cpu >= 0 && cpu < CPU_SETSIZE) {
+            CPU_SET((int) cpu, &cpu_mask);
+            valid_count++;
+        }
+    }
+    (*env)->ReleaseIntArrayElements(env, cpu_ids, ids, JNI_ABORT);
+
+    if (valid_count == 0) {
+        LOGE("CPU affinity selection did not contain a valid CPU ID");
+        return JNI_FALSE;
+    }
+
+    /*
+     * pid=0 applies to the calling Linux task (the Java service thread entering
+     * QEMU). QEMU native worker threads created from this thread inherit the mask.
+     * This is not a process-wide change and does not require root.
+     */
+    if (sched_setaffinity(0, sizeof(cpu_mask), &cpu_mask) != 0) {
+        LOGE("sched_setaffinity failed: errno=%d", errno);
+        return JNI_FALSE;
+    }
+    return JNI_TRUE;
 }
 
 JNIEXPORT void JNICALL Java_com_max2idea_android_limbo_jni_VMExecutor_nativeRefreshScreen(
