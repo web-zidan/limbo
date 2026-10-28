@@ -71,6 +71,13 @@ jobs:
           patch -d qemu -p1 < patches/qemu-5.1.0.patch
           patch -d glib -p1 < patches/glib-2.56.1.patch
           patch -d SDL2 -p1 < patches/sdl2-2.0.8.patch
+
+          # Rebuild the latest released SeaBIOS ROM against the QEMU 5.1 firmware interface.
+          curl -fL --retry 3 https://www.seabios.org/downloads/seabios-1.17.0.tar.gz -o seabios-1.17.0.tar.gz
+          tar -xzf seabios-1.17.0.tar.gz
+          make -C seabios-1.17.0 -j2
+          test -s seabios-1.17.0/out/bios.bin
+          cp seabios-1.17.0/out/bios.bin qemu/pc-bios/bios-256k.bin
       - name: Build native QEMU shared library
         shell: bash
         run: |
