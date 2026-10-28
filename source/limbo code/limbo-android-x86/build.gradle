@@ -8,7 +8,7 @@ android {
         applicationId "com.limbo.emu.main"
         minSdkVersion 21
         targetSdkVersion 29
-        ndk { abiFilters "armeabi-v7a","arm64-v8a", "x86", "x86_64" }
+        ndk { abiFilters "arm64-v8a" }
     }
     buildTypes {
         release {

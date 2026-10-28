@@ -48,18 +48,14 @@ public class FileInstaller {
     public static void installFiles(Activity activity, boolean force) {
         Log.d(TAG, "Installing files");
         File tmpDir = new File(LimboApplication.getBasefileDir());
-        if (!tmpDir.exists()) {
-            if(tmpDir.mkdirs()) {
-                ToastUtils.toastShort(activity, activity.getString(R.string.CouldNotCreateBaseDir) + ": " + tmpDir.getPath());
-                return;
-            }
+        if (!tmpDir.exists() && !tmpDir.mkdirs()) {
+            ToastUtils.toastShort(activity, activity.getString(R.string.CouldNotCreateBaseDir) + ": " + tmpDir.getPath());
+            return;
         }
 
         File tmpDir1 = new File(LimboApplication.getMachineDir());
-        if (!tmpDir1.exists()) {
-            if(tmpDir.mkdirs()) {
-                ToastUtils.toastShort(activity, activity.getString(R.string.CouldNotCreateMachineDir) + ": " + tmpDir.getPath());
-            }
+        if (!tmpDir1.exists() && !tmpDir1.mkdirs()) {
+            ToastUtils.toastShort(activity, activity.getString(R.string.CouldNotCreateMachineDir) + ": " + tmpDir1.getPath());
         }
 
         //Install base dir

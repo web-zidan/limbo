@@ -35,6 +35,7 @@ import com.max2idea.android.limbo.main.Config;
 import com.max2idea.android.limbo.main.LimboApplication;
 import com.max2idea.android.limbo.main.LimboSDLActivity;
 import com.max2idea.android.limbo.main.LimboSettingsManager;
+import com.max2idea.android.limbo.main.RuntimeOptions;
 import com.max2idea.android.limbo.qmp.QmpClient;
 import com.max2idea.android.limbo.toast.ToastUtils;
 
@@ -42,6 +43,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -104,6 +108,10 @@ class VMExecutor extends MachineExecutor {
     public native void nativeFullscreen();
 
     public native void nativeRefreshScreen(int value);
+
+    // Applied on the same background thread that initializes QEMU. Native QEMU worker
+    // threads created from it inherit this affinity mask.
+    private native boolean nativeSetHostCpuAffinity(int[] cpuIds);
 
     public native void nativeEnableAaudio(int value, String aaudioLibName, String aaudioLibPath);
 
@@ -478,7 +486,69 @@ private String getQemuLibrary() {
         }
     }
 
+    private void addFirmwareOptions(ArrayList<String> paramsList) {
+        if (!RuntimeOptions.FIRMWARE_UEFI.equals(
+                RuntimeOptions.getFirmware(LimboApplication.getInstance()))) {
+            return; // QEMU's bundled SeaBIOS remains the default.
+        }
+        if (LimboApplication.arch != Config.Arch.x86_64) {
+            Log.w(TAG, "OVMF x64 was selected for a non-x86_64 emulator package; using default firmware.");
+            return;
+        }
+
+        File baseDir = new File(LimboApplication.getBasefileDir());
+        File code = new File(baseDir, "OVMF_CODE.fd");
+        File varsTemplate = new File(baseDir, "OVMF_VARS.fd");
+        if (!code.isFile() || !varsTemplate.isFile()) {
+            Log.w(TAG, "OVMF assets are missing. Using the default QEMU firmware.");
+            return;
+        }
+
+        String machineName = getMachine() == null ? "default" : getMachine().getName();
+        String safeName = machineName.replaceAll("[^A-Za-z0-9_-]", "_");
+        String suffix = Integer.toHexString(machineName.hashCode());
+        File vars = new File(baseDir, "OVMF_VARS_" + safeName + "_" + suffix + ".fd");
+        if (!vars.isFile()) {
+            try {
+                copyFirmwareFile(varsTemplate, vars);
+            } catch (IOException e) {
+                Log.e(TAG, "Could not initialize writable OVMF variable store; using default firmware.", e);
+                return;
+            }
+        }
+
+        // Correct UEFI layout: read-only code flash plus a per-VM writable variable store.
+        paramsList.add("-drive");
+        paramsList.add("if=pflash,format=raw,unit=0,file=" + code.getAbsolutePath() + ",readonly=on");
+        paramsList.add("-drive");
+        paramsList.add("if=pflash,format=raw,unit=1,file=" + vars.getAbsolutePath());
+    }
+
+    private void copyFirmwareFile(File source, File destination) throws IOException {
+        FileInputStream input = null;
+        FileOutputStream output = null;
+        try {
+            input = new FileInputStream(source);
+            output = new FileOutputStream(destination);
+            byte[] buffer = new byte[32768];
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                output.write(buffer, 0, count);
+            }
+            output.flush();
+        } finally {
+            if (input != null) {
+                try { input.close(); } catch (IOException ignored) { }
+            }
+            if (output != null) {
+                try { output.close(); } catch (IOException ignored) { }
+            }
+        }
+    }
+
     private void addBootOptions(ArrayList<String> paramsList) {
+        addFirmwareOptions(paramsList);
+
         if (getBootDevice() != null) {
             paramsList.add("-boot");
             paramsList.add(getBootDevice());
@@ -727,7 +797,14 @@ private String getQemuLibrary() {
     public String start() {
         String res = null;
         try {
-            String[] params = prepareParams(LimboApplication.getInstance());
+            Context context = LimboApplication.getInstance();
+            int[] hostCpuIds = RuntimeOptions.getHostCpuIds(context);
+            if (hostCpuIds != null && hostCpuIds.length > 0) {
+                if (!nativeSetHostCpuAffinity(hostCpuIds)) {
+                    Log.w(TAG, "Could not apply host CPU affinity; continuing with Android's default CPU mask.");
+                }
+            }
+            String[] params = prepareParams(context);
             printParams(params);
             // XXX: for VNC we need to resume manually after a reasonable amount of time
             if (getMachine().getPaused() == 1 && MachineController.getInstance().isVNCEnabled()) {
