@@ -26,6 +26,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sched.h>
+#include <stdint.h>
+#include <sys/syscall.h>
 #include <dlfcn.h>
 #include <unwind.h>
 #include <dlfcn.h>
@@ -111,8 +113,9 @@ JNIEXPORT jboolean JNICALL Java_com_max2idea_android_limbo_jni_VMExecutor_native
         return JNI_TRUE;
     }
 
-    cpu_set_t cpu_mask;
-    CPU_ZERO(&cpu_mask);
+    /* Bionic does not expose glibc cpu_set_t macros on every NDK/API level.
+       Use the Linux kernel bitmask ABI directly; 1024 CPUs is ample for Android. */
+    uint64_t cpu_mask[16] = { 0 };
     jint *ids = (*env)->GetIntArrayElements(env, cpu_ids, NULL);
     if (ids == NULL) {
         return JNI_FALSE;
@@ -121,8 +124,8 @@ JNIEXPORT jboolean JNICALL Java_com_max2idea_android_limbo_jni_VMExecutor_native
     int valid_count = 0;
     for (jsize i = 0; i < count; i++) {
         jint cpu = ids[i];
-        if (cpu >= 0 && cpu < CPU_SETSIZE) {
-            CPU_SET((int) cpu, &cpu_mask);
+        if (cpu >= 0 && cpu < 1024) {
+            cpu_mask[(unsigned int) cpu / 64U] |= ((uint64_t) 1U << ((unsigned int) cpu % 64U));
             valid_count++;
         }
     }
@@ -133,12 +136,8 @@ JNIEXPORT jboolean JNICALL Java_com_max2idea_android_limbo_jni_VMExecutor_native
         return JNI_FALSE;
     }
 
-    /*
-     * pid=0 applies to the calling Linux task (the Java service thread entering
-     * QEMU). QEMU native worker threads created from this thread inherit the mask.
-     * This is not a process-wide change and does not require root.
-     */
-    if (sched_setaffinity(0, sizeof(cpu_mask), &cpu_mask) != 0) {
+    /* Apply to the current Linux task; QEMU worker threads inherit its mask. */
+    if (syscall(SYS_sched_setaffinity, 0, sizeof(cpu_mask), cpu_mask) != 0) {
         LOGE("sched_setaffinity failed: errno=%d", errno);
         return JNI_FALSE;
     }
