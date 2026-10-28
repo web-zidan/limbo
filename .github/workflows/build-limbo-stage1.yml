@@ -117,15 +117,33 @@ jobs:
           /tmp/gradle-6.5/bin/gradle wrapper --gradle-version 6.5 --distribution-type bin
           chmod +x gradlew
           ./gradlew --no-daemon :limbo-android-x86:assembleRelease
-          APK="$(find limbo-android-x86/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          APK="$(find limbo-android-x86/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' ! -name '*-signed.apk' -print -quit)"
           test -n "$APK"
           test -s "$APK"
-          echo "Built APK: $APK"
-          unzip -t "$APK"
-          unzip -l "$APK" | grep -E "libqemu-system-x86_64.so|assets/OVMF_CODE.fd|assets/OVMF_VARS.fd|roms/OVMF_" || true
+          echo "Built unsigned APK: $APK"
+
+          # Produce an installable development-signed APK. This key is not the official Limbo signing key.
+          BUILDTOOLS="$ANDROID_SDK_ROOT/build-tools/29.0.3"
+          ALIGNED="/tmp/limbo-upgrade-arm64-aligned.apk"
+          SIGNED="$PWD/limbo-android-x86/build/outputs/apk/release/limbo-android-x86-release-arm64-signed.apk"
+          "$BUILDTOOLS/zipalign" -f 4 "$APK" "$ALIGNED"
+          keytool -genkeypair -noprompt -v \
+            -keystore /tmp/limbo-upgrade.keystore -storepass android \
+            -alias limbo-upgrade -keypass android -keyalg RSA -keysize 2048 \
+            -validity 10000 -dname "CN=Limbo Upgrade Build,O=Development,C=ID"
+          "$BUILDTOOLS/apksigner" sign \
+            --ks /tmp/limbo-upgrade.keystore --ks-pass pass:android \
+            --key-pass pass:android --out "$SIGNED" "$ALIGNED"
+          "$BUILDTOOLS/apksigner" verify --verbose "$SIGNED"
+          unzip -t "$SIGNED"
+          unzip -l "$SIGNED" > /tmp/limbo-upgrade-apk-list.txt
+          grep -q "lib/arm64-v8a/libqemu-system-x86_64.so" /tmp/limbo-upgrade-apk-list.txt
+          grep -q "assets/roms/OVMF_CODE.fd" /tmp/limbo-upgrade-apk-list.txt
+          grep -q "assets/roms/OVMF_VARS.fd" /tmp/limbo-upgrade-apk-list.txt
+          echo "Verified signed APK: $SIGNED"
       - uses: actions/upload-artifact@v4
         with:
-          name: limbo-upgrade-stage1-arm64-apk
-          path: /tmp/limbo-source/limbo-android-x86/build/outputs/apk/release/*.apk
+          name: limbo-upgrade-stage1-arm64-signed-apk
+          path: /tmp/limbo-source/limbo-android-x86/build/outputs/apk/release/*-signed.apk
           if-no-files-found: error
           retention-days: 14
