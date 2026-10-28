@@ -123,7 +123,8 @@ jobs:
           echo "Built unsigned APK: $APK"
 
           # Produce an installable development-signed APK. This key is not the official Limbo signing key.
-          BUILDTOOLS="$ANDROID_SDK_ROOT/build-tools/29.0.3"
+          BUILDTOOLS="$(find "$ANDROID_SDK_ROOT/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          test -x "$BUILDTOOLS/apksigner"
           SIGNED="$PWD/limbo-android-x86/build/outputs/apk/release/limbo-android-x86-release-arm64-signed.apk"
           keytool -genkeypair -noprompt -v \
             -keystore /tmp/limbo-upgrade.keystore -storepass android \
