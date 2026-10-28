@@ -44,7 +44,7 @@ jobs:
       - name: Install native build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y autoconf automake bison flex gettext libtool libtool-bin make pkg-config python3 rsync texinfo wget curl xz-utils zip unzip
+          sudo apt-get install -y autoconf automake bison flex gettext gtk-doc-tools libtool libtool-bin make pkg-config python3 rsync texinfo wget curl xz-utils zip unzip
       - name: Download QEMU and matching historical dependencies
         shell: bash
         run: |
