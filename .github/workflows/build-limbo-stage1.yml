@@ -117,8 +117,10 @@ jobs:
           /tmp/gradle-6.5/bin/gradle wrapper --gradle-version 6.5 --distribution-type bin
           chmod +x gradlew
           ./gradlew --no-daemon :limbo-android-x86:assembleRelease
-          APK="limbo-android-x86/build/outputs/apk/release/limbo-android-x86-release.apk"
+          APK="$(find limbo-android-x86/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          test -n "$APK"
           test -s "$APK"
+          echo "Built APK: $APK"
           unzip -t "$APK"
           unzip -l "$APK" | grep -E "libqemu-system-x86_64.so|assets/OVMF_CODE.fd|assets/OVMF_VARS.fd|roms/OVMF_" || true
       - uses: actions/upload-artifact@v4
