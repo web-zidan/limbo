@@ -83,13 +83,17 @@ jobs:
           export USE_QEMU_VERSION=5.1.0
           export USE_AAUDIO=false
           export BUILD_THREADS=3
-          cd "source/limbo code/limbo-android-lib/src/main/jni"
+          # The original directory contains a space ("limbo code"), but legacy
+          # GNU Make recipes do not quote all paths. Build from a space-free copy.
+          rm -rf /tmp/limbo-source
+          cp -a "source/limbo code" /tmp/limbo-source
+          cd /tmp/limbo-source/limbo-android-lib/src/main/jni
           make limbo
       - name: Add bundled x86_64 OVMF firmware assets
         shell: bash
         run: |
           set -euo pipefail
-          ASSETS="source/limbo code/limbo-android-x86/src/main/assets/roms"
+          ASSETS="/tmp/limbo-source/limbo-android-x86/src/main/assets/roms"
           mkdir -p "$ASSETS"
           cp source/bios/x64/code.fd "$ASSETS/OVMF_CODE.fd"
           cp source/bios/x64/vars.fd "$ASSETS/OVMF_VARS.fd"
@@ -101,7 +105,7 @@ jobs:
           set -euo pipefail
           curl -fL --retry 3 https://services.gradle.org/distributions/gradle-6.5-bin.zip -o /tmp/gradle-6.5-bin.zip
           unzip -q /tmp/gradle-6.5-bin.zip -d /tmp
-          cd "source/limbo code"
+          cd /tmp/limbo-source
           /tmp/gradle-6.5/bin/gradle wrapper --gradle-version 6.5 --distribution-type bin
           chmod +x gradlew
           ./gradlew --no-daemon :limbo-android-x86:assembleRelease
@@ -112,6 +116,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: limbo-upgrade-stage1-arm64-apk
-          path: source/limbo code/limbo-android-x86/build/outputs/apk/release/*.apk
+          path: /tmp/limbo-source/limbo-android-x86/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 14
