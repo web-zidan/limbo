@@ -53,10 +53,14 @@ public class DrivesDialogBox extends Dialog implements Observer {
 
     private final Machine currMachine;
     public Spinner mCD;
+    public Spinner mCD2;
+    public Spinner mCD3;
     public Spinner mFDA;
     public Spinner mSD;
     public Spinner mFDB;
     public LinearLayout mCDLayout;
+    public LinearLayout mCD2Layout;
+    public LinearLayout mCD3Layout;
     public LinearLayout mFDALayout;
     public LinearLayout mFDBLayout;
     public LinearLayout mSDLayout;
@@ -101,6 +105,10 @@ public class DrivesDialogBox extends Dialog implements Observer {
     private void getWidgets() {
         mCD = (Spinner) findViewById(R.id.cdromimgval);
         mCDLayout = findViewById(R.id.cdromimgl);
+        mCD2 = (Spinner) findViewById(R.id.cdrom2imgval);
+        mCD2Layout = findViewById(R.id.cdrom2imgl);
+        mCD3 = (Spinner) findViewById(R.id.cdrom3imgval);
+        mCD3Layout = findViewById(R.id.cdrom3imgl);
 
         mFDA = (Spinner) findViewById(R.id.floppyimgval);
         mFDALayout = findViewById(R.id.floppyimgl);
@@ -115,6 +123,8 @@ public class DrivesDialogBox extends Dialog implements Observer {
 
     private void setupListeners() {
         setupListener(mCD, MachineProperty.CDROM, FileType.CDROM);
+        setupListener(mCD2, MachineProperty.CDROM2, FileType.CDROM2);
+        setupListener(mCD3, MachineProperty.CDROM3, FileType.CDROM3);
         setupListener(mFDA, MachineProperty.FDA, FileType.FDA);
         setupListener(mFDB, MachineProperty.FDB, FileType.FDB);
         setupListener(mSD, MachineProperty.SD, FileType.SD);
@@ -184,6 +194,16 @@ public class DrivesDialogBox extends Dialog implements Observer {
                 } else {
                     mCDLayout.setVisibility(View.GONE);
                 }
+                if (currMachine.isEnableCDROM2()) {
+                    populateDiskAdapter(mCD2, FileType.CDROM2, false, currMachine.getCd2ImagePath());
+                } else {
+                    mCD2Layout.setVisibility(View.GONE);
+                }
+                if (currMachine.isEnableCDROM3()) {
+                    populateDiskAdapter(mCD3, FileType.CDROM3, false, currMachine.getCd3ImagePath());
+                } else {
+                    mCD3Layout.setVisibility(View.GONE);
+                }
                 if (currMachine.isEnableFDA()) {
                     populateDiskAdapter(mFDA, FileType.FDA, false, currMachine.getFdaImagePath());
                 } else {
@@ -215,6 +235,12 @@ public class DrivesDialogBox extends Dialog implements Observer {
         if (fileType == FileType.CDROM && file != null && !file.trim().equals("")) {
             notifyFieldChange(MachineProperty.CDROM, file);
             setSpinnerValue(mCD, file);
+        } else if (fileType == FileType.CDROM2 && file != null && !file.trim().equals("")) {
+            notifyFieldChange(MachineProperty.CDROM2, file);
+            setSpinnerValue(mCD2, file);
+        } else if (fileType == FileType.CDROM3 && file != null && !file.trim().equals("")) {
+            notifyFieldChange(MachineProperty.CDROM3, file);
+            setSpinnerValue(mCD3, file);
         } else if (fileType == FileType.SD && file != null && !file.trim().equals("")) {
             notifyFieldChange(MachineProperty.SD, file);
             setSpinnerValue(mSD, file);
@@ -280,6 +306,12 @@ public class DrivesDialogBox extends Dialog implements Observer {
             case CDROM:
                 if(value == null)
                     setDiskValue(mCD, "");
+                break;
+            case CDROM2:
+                if(value == null) setDiskValue(mCD2, "");
+                break;
+            case CDROM3:
+                if(value == null) setDiskValue(mCD3, "");
                 break;
             case FDA:
                 if(value == null)
