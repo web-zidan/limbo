@@ -68,6 +68,14 @@ public class Dispatcher implements ViewListener {
                 MachineController.getInstance().changeRemovableDevice(diskFileType, drivePath);
                 MachineFilePaths.insertRecentFilePath(Machine.FileType.CDROM, drivePath);
                 break;
+            case CDROM2:
+                MachineController.getInstance().changeRemovableDevice(diskFileType, drivePath);
+                MachineFilePaths.insertRecentFilePath(Machine.FileType.CDROM2, drivePath);
+                break;
+            case CDROM3:
+                MachineController.getInstance().changeRemovableDevice(diskFileType, drivePath);
+                MachineFilePaths.insertRecentFilePath(Machine.FileType.CDROM3, drivePath);
+                break;
             case FDA:
                 MachineFilePaths.insertRecentFilePath(Machine.FileType.FDA, drivePath);
                 MachineController.getInstance().changeRemovableDevice(diskFileType, drivePath);
@@ -93,6 +101,12 @@ public class Dispatcher implements ViewListener {
         switch (machineProperty) {
             case CDROM:
                 getMachine().setEnableCDROM(isChecked);
+                break;
+            case CDROM2:
+                getMachine().setEnableCDROM2(isChecked);
+                break;
+            case CDROM3:
+                getMachine().setEnableCDROM3(isChecked);
                 break;
             case FDA:
                 getMachine().setEnableFDA(isChecked);
@@ -272,6 +286,10 @@ public class Dispatcher implements ViewListener {
         switch (property) {
             case CDROM:
                 return getMachine().isEnableCDROM();
+            case CDROM2:
+                return getMachine().isEnableCDROM2();
+            case CDROM3:
+                return getMachine().isEnableCDROM3();
             case FDA:
                 return getMachine().isEnableFDA();
             case FDB:
