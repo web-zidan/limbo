@@ -62,8 +62,12 @@ jobs:
           # Upstream archives use data/share; unpack within RUNNER_TEMP to avoid
           # writing to the runner root filesystem, then relocate into a prefix.
           unzip -q -o /tmp/libepoxy-android.zip -d "$RUNNER_TEMP/epoxy-root"
-          test -d "$RUNNER_TEMP/epoxy-root/data/share"
-          cp -a "$RUNNER_TEMP/epoxy-root/data/share/." "$INSTALL_PREFIX/"
+          # Release archives are rooted under a build/API directory (for example
+          # android-10/data/share), so locate the install prefix instead of
+          # assuming it sits at the ZIP root.
+          EPOXY_SHARE="$(find "$RUNNER_TEMP/epoxy-root" -type d -path '*/data/share' -print -quit)"
+          test -n "$EPOXY_SHARE"
+          cp -a "$EPOXY_SHARE/." "$INSTALL_PREFIX/"
           EPOXY_REAL="$(find "$INSTALL_PREFIX/lib" "$INSTALL_PREFIX/lib64" -maxdepth 1 -type f -name 'libepoxy.so*' 2>/dev/null | head -1)"
           test -n "$EPOXY_REAL"
           patchelf --set-soname libepoxy.so "$EPOXY_REAL"
