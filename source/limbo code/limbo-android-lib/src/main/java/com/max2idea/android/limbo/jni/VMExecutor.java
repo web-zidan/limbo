@@ -481,7 +481,9 @@ private String getQemuLibrary() {
     }
 
     private void addBootOptions(ArrayList<String> paramsList) {
-        if (getBootDevice() != null) {
+        // Do not mix classic "-boot order=" with per-device bootindex; QEMU firmware
+        // implementations generally support one mechanism or the other, not both.
+        if (getBootDevice() != null && !usesExplicitCdBootIndex()) {
             paramsList.add("-boot");
             paramsList.add(getBootDevice());
         }
@@ -520,10 +522,20 @@ private String getQemuLibrary() {
         return null;
     }
 
-    private int getCdBootIndex(int cdromNumber) {
+    private boolean usesExplicitCdBootIndex() {
+        if (Config.legacyDrives) return false;
         String selected = getMachine().getBootDevice();
         if ("CDROM".equals(selected)) selected = "CD-ROM 1";
-        if (!("CD-ROM 1".equals(selected) || "CD-ROM 2".equals(selected) || "CD-ROM 3".equals(selected))) return 0;
+        if ("CD-ROM 1".equals(selected)) return getMachine().getCdImagePath() != null;
+        if ("CD-ROM 2".equals(selected)) return getMachine().getCd2ImagePath() != null;
+        if ("CD-ROM 3".equals(selected)) return getMachine().getCd3ImagePath() != null;
+        return false;
+    }
+
+    private int getCdBootIndex(int cdromNumber) {
+        if (Config.legacyDrives || !usesExplicitCdBootIndex()) return 0;
+        String selected = getMachine().getBootDevice();
+        if ("CDROM".equals(selected)) selected = "CD-ROM 1";
         int selectedNumber = "CD-ROM 2".equals(selected) ? 2 : ("CD-ROM 3".equals(selected) ? 3 : 1);
         if (cdromNumber == selectedNumber) return 1;
         return cdromNumber < selectedNumber ? cdromNumber + 1 : cdromNumber;
