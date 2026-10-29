@@ -1533,6 +1533,8 @@ public class LimboActivity extends AppCompatActivity
                 && FileUtils.fileValid(getMachine().getFdbImagePath())
                 && FileUtils.fileValid(getMachine().getSdImagePath())
                 && FileUtils.fileValid(getMachine().getCdImagePath())
+                && FileUtils.fileValid(getMachine().getCd2ImagePath())
+                && FileUtils.fileValid(getMachine().getCd3ImagePath())
                 && FileUtils.fileValid(getMachine().getKernel())
                 && FileUtils.fileValid(getMachine().getInitRd());
     }
