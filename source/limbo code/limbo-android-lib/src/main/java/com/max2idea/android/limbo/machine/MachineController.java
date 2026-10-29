@@ -252,6 +252,12 @@ public class MachineController {
             case CDROM:
                 getMachine().setCdImagePath(value);
                 break;
+            case CDROM2:
+                getMachine().setCd2ImagePath(value);
+                break;
+            case CDROM3:
+                getMachine().setCd3ImagePath(value);
+                break;
             case FDA:
                 getMachine().setFdaImagePath(value);
                 break;
