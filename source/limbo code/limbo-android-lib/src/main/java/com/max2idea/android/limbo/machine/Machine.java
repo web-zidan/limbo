@@ -59,10 +59,14 @@ public class Machine extends Observable {
     private String sharedFolderPath;
     //Removable devices
     private boolean enableCDROM;
+    private boolean enableCDROM2;
+    private boolean enableCDROM3;
     private boolean enableFDA;
     private boolean enableFDB;
     private boolean enableSD;
     private String cdImagePath;
+    private String cd2ImagePath;
+    private String cd3ImagePath;
     private String fdaImagePath;
     private String fdbImagePath;
     private String sdImagePath;
@@ -358,6 +362,15 @@ public class Machine extends Observable {
         }
     }
 
+    public boolean isEnableCDROM2() { return enableCDROM2; }
+    void setEnableCDROM2(boolean value) {
+        if (enableCDROM2 != value) { enableCDROM2 = value; setChanged(); notifyChanged(MachineProperty.OTHER, value); }
+    }
+    public boolean isEnableCDROM3() { return enableCDROM3; }
+    void setEnableCDROM3(boolean value) {
+        if (enableCDROM3 != value) { enableCDROM3 = value; setChanged(); notifyChanged(MachineProperty.OTHER, value); }
+    }
+
     public boolean isEnableFDA() {
         return enableFDA;
     }
@@ -402,12 +415,20 @@ public class Machine extends Observable {
     }
 
     void setCdImagePath(String cdImagePath) {
-
         if (this.cdImagePath == null || !this.cdImagePath.equals(cdImagePath)) {
             this.cdImagePath = cdImagePath;
             setChanged();
             notifyChanged(MachineProperty.CDROM, cdImagePath);
         }
+    }
+
+    public String getCd2ImagePath() { return cd2ImagePath; }
+    void setCd2ImagePath(String value) {
+        if (cd2ImagePath == null || !cd2ImagePath.equals(value)) { cd2ImagePath = value; setChanged(); notifyChanged(MachineProperty.CDROM2, value); }
+    }
+    public String getCd3ImagePath() { return cd3ImagePath; }
+    void setCd3ImagePath(String value) {
+        if (cd3ImagePath == null || !cd3ImagePath.equals(value)) { cd3ImagePath = value; setChanged(); notifyChanged(MachineProperty.CDROM3, value); }
     }
 
     public String getFdaImagePath() {
@@ -614,7 +635,7 @@ public class Machine extends Observable {
     }
 
     public boolean hasRemovableDevices() {
-        return enableCDROM || enableFDA || enableFDB || enableSD;
+        return enableCDROM || enableCDROM2 || enableCDROM3 || enableFDA || enableFDB || enableSD;
     }
 
     void setDefaults() {
@@ -699,7 +720,7 @@ public class Machine extends Observable {
     }
 
     public enum FileType {
-        CDROM, FDA, FDB, SD,
+        CDROM, CDROM2, CDROM3, FDA, FDB, SD,
         HDA, HDB, HDC, HDD, SHARED_DIR,
         KERNEL, INITRD,
         EXPORT_DIR, IMAGE_DIR, LOG_DIR, IMPORT_FILE, IMPORT_BIOS_FILE
