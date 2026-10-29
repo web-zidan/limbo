@@ -482,7 +482,7 @@ private String getQemuLibrary() {
                 paramsList.add("-display");
                 paramsList.add("sdl,gl=on");
                 paramsList.add("-device");
-                paramsList.add("virtio-vga-gl");
+                paramsList.add("virtio-vga");
                 Log.i(TAG, "Guest OpenGL enabled through QEMU VirGL renderer");
                 return;
             } else {
