@@ -471,6 +471,25 @@ private String getQemuLibrary() {
     }
 
     private void addGraphicsOptions(ArrayList<String> paramsList) {
+        String graphicsBackend = RuntimeOptions.getGraphicsBackend(
+                LimboApplication.getInstance());
+        if (RuntimeOptions.GRAPHICS_OPENGL.equals(graphicsBackend)) {
+            if (LimboApplication.arch == Config.Arch.x86_64
+                    || LimboApplication.arch == Config.Arch.x86) {
+                // QEMU 5.1's VirGL device requires both the GL SDL display
+                // and the virtio-vga-gl device. Do not also add the user's
+                // legacy -vga selection or QEMU will create conflicting GPUs.
+                paramsList.add("-display");
+                paramsList.add("sdl,gl=on");
+                paramsList.add("-device");
+                paramsList.add("virtio-vga-gl");
+                Log.i(TAG, "Guest OpenGL enabled through QEMU VirGL renderer");
+                return;
+            } else {
+                Log.w(TAG, "VirGL OpenGL is only wired for x86/x86_64 guest builds; using the configured VGA adapter");
+            }
+        }
+
         if (getMachine().getVga() != null) {
             if (getMachine().getVga().equals("Default")) {
                 //do nothing
