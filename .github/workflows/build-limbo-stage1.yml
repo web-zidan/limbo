@@ -56,22 +56,27 @@ jobs:
           INSTALL_PREFIX="$RUNNER_TEMP/limbo-virgl"
           mkdir -p "$INSTALL_PREFIX" "$RUNNER_TEMP/epoxy-root"
           echo "ANDROID_VIRGL_PREFIX=$INSTALL_PREFIX" >> "$GITHUB_ENV"
-          curl -fsSL https://api.github.com/repos/DreamConnected/libepoxy-dev/releases/latest -o /tmp/libepoxy-release.json
-          EPOXY_URL="$(python3 -c 'import json; d=json.load(open("/tmp/libepoxy-release.json")); print(next(a["browser_download_url"] for a in d["assets"] if a["name"].lower().endswith(".zip")))')"
-          curl -fL --retry 3 "$EPOXY_URL" -o /tmp/libepoxy-android.zip
-          # Upstream archives use data/share; unpack within RUNNER_TEMP to avoid
-          # writing to the runner root filesystem, then relocate into a prefix.
-          unzip -q -o /tmp/libepoxy-android.zip -d "$RUNNER_TEMP/epoxy-root"
-          # Release archives are rooted under a build/API directory (for example
-          # android-10/data/share), so locate the install prefix instead of
-          # assuming it sits at the ZIP root.
-          EPOXY_SHARE="$(find "$RUNNER_TEMP/epoxy-root" -type d -path '*/data/share' -print -quit)"
-          test -n "$EPOXY_SHARE"
-          cp -a "$EPOXY_SHARE/." "$INSTALL_PREFIX/"
-          EPOXY_REAL="$(find "$INSTALL_PREFIX/lib" "$INSTALL_PREFIX/lib64" -maxdepth 1 -type f -name 'libepoxy.so*' 2>/dev/null | head -1)"
+          # Build libepoxy from source with the same Android NDK instead of
+          # relying on a prebuilt archive's install layout.
+          git clone --filter=blob:none https://github.com/DreamConnected/libepoxy-dev.git /tmp/libepoxy
+          git -C /tmp/libepoxy checkout 39e20083b789caa2b88f9e8781d98545bbec5d4a
+          sed -i "s|android-ndk-r28c|$ANDROID_SDK_ROOT/ndk/23.1.7779620|g" /tmp/libepoxy/aarch64-android-api30.txt
+          meson setup /tmp/libepoxy/build /tmp/libepoxy \
+            -Dglx=no \
+            -Degl=yes \
+            -Dtests=false \
+            -Ddocs=false \
+            --prefix="$INSTALL_PREFIX" \
+            --libdir=lib \
+            --cross-file=/tmp/libepoxy/aarch64-android-api30.txt
+          meson compile -C /tmp/libepoxy/build
+          meson install -C /tmp/libepoxy/build
+          EPOXY_REAL="$(find "$INSTALL_PREFIX" -type f -name 'libepoxy.so*' 2>/dev/null | sort -V | tail -1)"
           test -n "$EPOXY_REAL"
           patchelf --set-soname libepoxy.so "$EPOXY_REAL"
-          find "$INSTALL_PREFIX" -name '*.pc' -type f -exec sed -i "s|/data/share|$INSTALL_PREFIX|g" {} +
+          EPOXY_PC="$(find "$INSTALL_PREFIX" -type f -name 'epoxy.pc' -print -quit)"
+          test -n "$EPOXY_PC"
+          export PKG_CONFIG_PATH="$(dirname "$EPOXY_PC"):$INSTALL_PREFIX/lib/pkgconfig:$INSTALL_PREFIX/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
           git clone --filter=blob:none https://github.com/Container-On-Android/virglrenderer.git /tmp/virglrenderer
           git -C /tmp/virglrenderer checkout 30b31117cffe52f73d3520abe67c5a1c2f2ef3a0
           sed -i "s|android-ndk-r28c|$ANDROID_SDK_ROOT/ndk/23.1.7779620|g" /tmp/virglrenderer/aarch64-android-api30.txt
