@@ -1,0 +1,70 @@
+name: Build Limbo with Three CD-ROMs
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/three-cdroms
+    paths:
+      - ".github/workflows/build-three-cdroms.yml"
+      - "source/limbo code/**"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "11"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-29" "build-tools;29.0.3" "platform-tools"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "6.5.1"
+
+      - name: Restore native libraries and ROM assets from official 6.0.1 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="source/limbo code"
+          BASE_APK_URL="https://github.com/limboemu/limbo/releases/download/v6.0.1-LimboEmulator/limbo-android-x86-6.0.1-qemu-5.1.0.apk"
+          curl --fail --location --retry 3 --retry-delay 2 "$BASE_APK_URL" --output /tmp/limbo-base.apk
+          mkdir -p /tmp/limbo-base
+          unzip -oq /tmp/limbo-base.apk 'lib/*' 'assets/roms/*' -d /tmp/limbo-base
+          mkdir -p "$APP/limbo-android-x86/src/main/jniLibs" "$APP/limbo-android-lib/src/main/assets/roms"
+          cp -a /tmp/limbo-base/lib/. "$APP/limbo-android-x86/src/main/jniLibs/"
+          cp -a /tmp/limbo-base/assets/roms/. "$APP/limbo-android-lib/src/main/assets/roms/"
+          test -d "$APP/limbo-android-x86/src/main/jniLibs/arm64-v8a"
+          test -d "$APP/limbo-android-x86/src/main/jniLibs/x86_64"
+          test -f "$APP/limbo-android-lib/src/main/assets/roms/bios.bin"
+
+      - name: Build debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p "source/limbo code" --no-daemon :limbo-android-x86:assembleDebug
+
+      - name: Upload modified APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: limbo-three-cdroms-debug-apk
+          path: "source/limbo code/limbo-android-x86/build/outputs/apk/debug/*.apk"
+          if-no-files-found: error
