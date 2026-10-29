@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - limbo-upgrade-stage1
+      - limbo-opengl-stage2
     paths:
       - "source/limbo code/**"
       - "source/bios/x64/**"
@@ -44,7 +45,49 @@ jobs:
       - name: Install native build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y autoconf automake bison flex gettext gtk-doc-tools libtool libtool-bin make pkg-config python3 rsync texinfo wget curl xz-utils zip unzip
+          sudo apt-get install -y autoconf automake bison flex gettext gtk-doc-tools libtool libtool-bin make pkg-config python3 rsync texinfo wget curl xz-utils zip unzip meson ninja-build patchelf jq
+      - name: Build Android ARM64 VirGL renderer (OpenGL guest acceleration)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # VirGL translates guest OpenGL calls to the host EGL/GLES stack.
+          # Vulkan/venus is intentionally disabled here: QEMU 5.1 in Limbo does
+          # not implement the newer venus/rutabaga virtio-gpu interface.
+          mkdir -p /data/share
+          curl -fsSL https://api.github.com/repos/DreamConnected/libepoxy-dev/releases/latest -o /tmp/libepoxy-release.json
+          EPOXY_URL="$(python3 -c 'import json; d=json.load(open("/tmp/libepoxy-release.json")); print(next(a["browser_download_url"] for a in d["assets"] if a["name"].lower().endswith(".zip")))')"
+          curl -fL --retry 3 "$EPOXY_URL" -o /tmp/libepoxy-android.zip
+          sudo unzip -q -o /tmp/libepoxy-android.zip -d /
+          EPOXY_REAL="$(find /data/share/lib /data/share/lib64 -maxdepth 1 -type f -name 'libepoxy.so*' 2>/dev/null | head -1)"
+          test -n "$EPOXY_REAL"
+          sudo patchelf --set-soname libepoxy.so "$EPOXY_REAL"
+          git clone --filter=blob:none https://github.com/Container-On-Android/virglrenderer.git /tmp/virglrenderer
+          git -C /tmp/virglrenderer checkout 30b31117cffe52f73d3520abe67c5a1c2f2ef3a0
+          sed -i "s|android-ndk-r28c|$ANDROID_SDK_ROOT/ndk/23.1.7779620|g" /tmp/virglrenderer/aarch64-android-api30.txt
+          export PKG_CONFIG_PATH=/data/share/lib/pkgconfig:/data/share/lib64/pkgconfig:${PKG_CONFIG_PATH:-}
+          meson setup /tmp/virglrenderer/build /tmp/virglrenderer \
+            -Dvenus=false \
+            -Dvulkan-dload=false \
+            -Dplatforms=egl \
+            -Dvideo=false \
+            -Drender-server-worker=thread \
+            -Ddrm-renderers= \
+            -Dtests=false \
+            -Dfuzzer=false \
+            -Dvalgrind=false \
+            -Dtracing=none \
+            --prefix=/data/share \
+            --libdir=lib \
+            --cross-file=/tmp/virglrenderer/aarch64-android-api30.txt
+          meson compile -C /tmp/virglrenderer/build
+          sudo meson install -C /tmp/virglrenderer/build
+          VIRGL_REAL="$(find /data/share/lib /data/share/lib64 -maxdepth 1 -type f -name 'libvirglrenderer.so*' 2>/dev/null | sort -V | tail -1)"
+          test -n "$VIRGL_REAL"
+          sudo patchelf --set-soname libvirglrenderer.so "$VIRGL_REAL"
+          test -s "$(find /data/share/lib /data/share/lib64 -maxdepth 1 -name 'virglrenderer.pc' -print -quit)"
+          echo "PKG_CONFIG_PATH=/data/share/lib/pkgconfig:/data/share/lib64/pkgconfig:${PKG_CONFIG_PATH:-}" >> "$GITHUB_ENV"
+          echo "ANDROID_VIRGL_LIB_DIR=/data/share/lib" >> "$GITHUB_ENV"
+          echo "Built Android VirGL library: $VIRGL_REAL"
       - name: Download QEMU and matching historical dependencies
         shell: bash
         run: |
@@ -69,6 +112,9 @@ jobs:
           mv /tmp/limbo-deps/pixman-0.40.0 pixman
           mv /tmp/limbo-deps/SDL2-2.0.8 SDL2
           patch -d qemu -p1 < patches/qemu-5.1.0.patch
+          # Android has EGL/GLES but not Mesa GBM. QEMU 5.1's OpenGL probe
+          # otherwise requires both epoxy and GBM even for SDL's EGL path.
+          sed -i 's/opengl_pkgs="epoxy gbm"/opengl_pkgs="epoxy"/' qemu/configure
           patch -d glib -p1 < patches/glib-2.56.1.patch
           patch -d SDL2 -p1 < patches/sdl2-2.0.8.patch
 
@@ -107,6 +153,20 @@ jobs:
           cp source/bios/x64/vars.fd "$ASSETS/OVMF_VARS.fd"
           test -s "$ASSETS/OVMF_CODE.fd"
           test -s "$ASSETS/OVMF_VARS.fd"
+          # Package the Android-built VirGL and epoxy shared libraries beside QEMU.
+          # Android's linker resolves DT_NEEDED libraries only if they are in the APK ABI dir.
+          JNILIBS="/tmp/limbo-source/limbo-android-x86/src/main/jniLibs/arm64-v8a"
+          mkdir -p "$JNILIBS"
+          for LIB in libvirglrenderer.so libepoxy.so; do
+            REAL="$(find /data/share/lib /data/share/lib64 -maxdepth 1 -type f -name "$LIB*" 2>/dev/null | sort -V | tail -1)"
+            test -n "$REAL"
+            cp "$REAL" "$JNILIBS/$LIB"
+            test -s "$JNILIBS/$LIB"
+          done
+          QEMU_LIB="/tmp/limbo-source/limbo-android-x86/src/main/jniLibs/arm64-v8a/libqemu-system-x86_64.so"
+          test -s "$QEMU_LIB"
+          NEEDED="$ANDROID_SDK_ROOT/ndk/23.1.7779620/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          "$NEEDED" -d "$QEMU_LIB" | grep -E 'libvirglrenderer\.so|libepoxy\.so'
       - name: Generate Gradle wrapper and build release APK
         shell: bash
         run: |
@@ -143,7 +203,7 @@ jobs:
           echo "Verified signed APK: $SIGNED"
       - uses: actions/upload-artifact@v4
         with:
-          name: limbo-upgrade-stage1-arm64-signed-apk
+          name: limbo-opengl-stage2-arm64-signed-apk
           path: /tmp/limbo-source/limbo-android-x86/build/outputs/apk/release/*-signed.apk
           if-no-files-found: error
           retention-days: 14
