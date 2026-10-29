@@ -31,6 +31,13 @@
                     android:paddingRight="5dp"
                     android:src="@drawable/cdrom" />
 
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:paddingRight="8dp"
+                    android:text="CD-ROM 1" />
+
                 <Spinner
                     android:id="@+id/cdromimgval"
                     android:layout_width="fill_parent"
