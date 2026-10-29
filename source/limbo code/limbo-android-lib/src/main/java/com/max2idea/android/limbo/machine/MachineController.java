@@ -364,6 +364,8 @@ public class MachineController {
         ArrayList<Machine> machines = MachineImporter.importMachines(importFilePath);
         for (Machine machine : machines) {
             MachineFilePaths.insertRecentFilePath(Machine.FileType.CDROM, machine.getCdImagePath());
+            MachineFilePaths.insertRecentFilePath(Machine.FileType.CDROM2, machine.getCd2ImagePath());
+            MachineFilePaths.insertRecentFilePath(Machine.FileType.CDROM3, machine.getCd3ImagePath());
             MachineFilePaths.insertRecentFilePath(Machine.FileType.HDA, machine.getHdaImagePath());
             MachineFilePaths.insertRecentFilePath(Machine.FileType.HDB, machine.getHdbImagePath());
             MachineFilePaths.insertRecentFilePath(Machine.FileType.HDC, machine.getHdcImagePath());
