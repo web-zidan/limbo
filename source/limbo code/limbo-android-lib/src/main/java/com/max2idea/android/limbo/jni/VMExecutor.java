@@ -54,6 +54,8 @@ class VMExecutor extends MachineExecutor {
     private static final String TAG = "VMExecutor";
 
     private static final String cdDeviceName = "ide1-cd0";
+    private static final String cd2DeviceName = "limbo-cd2";
+    private static final String cd3DeviceName = "limbo-cd3";
     private static final String fdaDeviceName = "floppy0";
     private static final String fdbDeviceName = "floppy1";
     private static final String sdDeviceName = "sd0";
@@ -507,7 +509,8 @@ private String getQemuLibrary() {
             return null;
         } else if (getMachine().getBootDevice().equals("Default")) {
             return null;
-        } else if (getMachine().getBootDevice().equals("CDROM")) {
+        } else if (getMachine().getBootDevice().equals("CDROM")
+                || getMachine().getBootDevice().startsWith("CD-ROM ")) {
             return "d";
         } else if (getMachine().getBootDevice().equals("Floppy")) {
             return "a";
@@ -515,6 +518,15 @@ private String getQemuLibrary() {
             return "c";
         }
         return null;
+    }
+
+    private int getCdBootIndex(int cdromNumber) {
+        String selected = getMachine().getBootDevice();
+        if ("CDROM".equals(selected)) selected = "CD-ROM 1";
+        if (!("CD-ROM 1".equals(selected) || "CD-ROM 2".equals(selected) || "CD-ROM 3".equals(selected))) return 0;
+        int selectedNumber = "CD-ROM 2".equals(selected) ? 2 : ("CD-ROM 3".equals(selected) ? 3 : 1);
+        if (cdromNumber == selectedNumber) return 1;
+        return cdromNumber < selectedNumber ? cdromNumber + 1 : cdromNumber;
     }
 
     private String getInitRd() {
@@ -598,21 +610,53 @@ private String getQemuLibrary() {
 
     public void addRemovableDrives(ArrayList<String> paramsList) {
         String cdImagePath = getDriveFilePath(getMachine().getCdImagePath());
+        String cd2ImagePath = getDriveFilePath(getMachine().getCd2ImagePath());
+        String cd3ImagePath = getDriveFilePath(getMachine().getCd3ImagePath());
+
+        // CD-ROM 1 stays in the old secondary-master position for compatibility.
         if (cdImagePath != null) {
             if (Config.legacyDrives) {
                 paramsList.add("-cdrom");
                 paramsList.add(cdImagePath);
             } else {
-                paramsList.add("-drive"); //empty
-                String param = "index=2";
-                param += ",if=";
-                param += getMachine().getCDInterface();
-                param += ",media=cdrom";
-                if (!cdImagePath.equals("")) {
-                    param += ",file=" + cdImagePath;
-                }
-                paramsList.add(param);
+                paramsList.add("-drive");
+                String drive = "if=none,id=limbo_cd1,media=cdrom";
+                if (!cdImagePath.equals("")) drive += ",file=" + cdImagePath;
+                paramsList.add(drive);
+                paramsList.add("-device");
+                String device = "ide-cd,drive=limbo_cd1,bus=ide.1,unit=0,id=ide1-cd0";
+                int bootIndex = getCdBootIndex(1);
+                if (bootIndex > 0) device += ",bootindex=" + bootIndex;
+                paramsList.add(device);
             }
+        }
+
+        // Extra optical drives use their own IDE controller to avoid HDA-HDD slots.
+        if (cd2ImagePath != null || cd3ImagePath != null) {
+            paramsList.add("-device");
+            paramsList.add("pci-ide,id=limbo_cd_extra");
+        }
+        if (cd2ImagePath != null) {
+            paramsList.add("-drive");
+            String drive = "if=none,id=limbo_cd2,media=cdrom";
+            if (!cd2ImagePath.equals("")) drive += ",file=" + cd2ImagePath;
+            paramsList.add(drive);
+            paramsList.add("-device");
+            String device = "ide-cd,drive=limbo_cd2,bus=limbo_cd_extra.0,unit=0,id=limbo-cd2";
+            int bootIndex = getCdBootIndex(2);
+            if (bootIndex > 0) device += ",bootindex=" + bootIndex;
+            paramsList.add(device);
+        }
+        if (cd3ImagePath != null) {
+            paramsList.add("-drive");
+            String drive = "if=none,id=limbo_cd3,media=cdrom";
+            if (!cd3ImagePath.equals("")) drive += ",file=" + cd3ImagePath;
+            paramsList.add(drive);
+            paramsList.add("-device");
+            String device = "ide-cd,drive=limbo_cd3,bus=limbo_cd_extra.1,unit=0,id=limbo-cd3";
+            int bootIndex = getCdBootIndex(3);
+            if (bootIndex > 0) device += ",bootindex=" + bootIndex;
+            paramsList.add(device);
         }
 
         String fdaImagePath = getDriveFilePath(getMachine().getFdaImagePath());
@@ -812,6 +856,10 @@ private String getQemuLibrary() {
         switch (driveProperty) {
             case CDROM:
                 return cdDeviceName;
+            case CDROM2:
+                return cd2DeviceName;
+            case CDROM3:
+                return cd3DeviceName;
             case FDA:
                 return fdaDeviceName;
             case FDB:
