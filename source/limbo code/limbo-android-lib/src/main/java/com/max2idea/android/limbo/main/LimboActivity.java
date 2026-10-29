@@ -146,10 +146,14 @@ public class LimboActivity extends AppCompatActivity
 
     //removable
     private Spinner mCD;
+    private Spinner mCD2;
+    private Spinner mCD3;
     private Spinner mFDA;
     private Spinner mFDB;
     private Spinner mSD;
     private CheckBox mCDenable;
+    private CheckBox mCD2enable;
+    private CheckBox mCD3enable;
     private CheckBox mFDAenable;
     private CheckBox mFDBenable;
     private CheckBox mSDenable;
@@ -270,9 +274,11 @@ public class LimboActivity extends AppCompatActivity
 
     private void disableRemovableDiskListeners() {
         disableRemovableDiskListener(mCDenable, mCD);
-        disableRemovableDiskListener(mCDenable, mCD);
-        disableRemovableDiskListener(mCDenable, mCD);
-        disableRemovableDiskListener(mCDenable, mCD);
+        disableRemovableDiskListener(mCD2enable, mCD2);
+        disableRemovableDiskListener(mCD3enable, mCD3);
+        disableRemovableDiskListener(mFDAenable, mFDA);
+        disableRemovableDiskListener(mFDBenable, mFDB);
+        disableRemovableDiskListener(mSDenable, mSD);
     }
 
     private void disableRemovableDiskListener(CheckBox enableDrive, Spinner spinner) {
@@ -282,6 +288,8 @@ public class LimboActivity extends AppCompatActivity
 
     private void enableRemovableDiskListeners() {
         enableRemovableDiskListener(mCD, mCDenable, mCDOptions, MachineProperty.CDROM, FileType.CDROM);
+        enableRemovableDiskListener(mCD2, mCD2enable, null, MachineProperty.CDROM2, FileType.CDROM2);
+        enableRemovableDiskListener(mCD3, mCD3enable, null, MachineProperty.CDROM3, FileType.CDROM3);
         enableRemovableDiskListener(mFDA, mFDAenable, null, MachineProperty.FDA, FileType.FDA);
         enableRemovableDiskListener(mFDB, mFDBenable, null, MachineProperty.FDB, FileType.FDB);
         enableRemovableDiskListener(mSD, mSDenable, null, MachineProperty.SD, FileType.SD);
@@ -1011,6 +1019,8 @@ public class LimboActivity extends AppCompatActivity
         addDiskMapping(FileType.SHARED_DIR, mSharedFolder, null, MachineProperty.SHARED_FOLDER);
 
         addDiskMapping(FileType.CDROM, mCD, mCDenable, MachineProperty.CDROM);
+        addDiskMapping(FileType.CDROM2, mCD2, mCD2enable, MachineProperty.CDROM2);
+        addDiskMapping(FileType.CDROM3, mCD3, mCD3enable, MachineProperty.CDROM3);
         addDiskMapping(FileType.FDA, mFDA, mFDAenable, MachineProperty.FDA);
         addDiskMapping(FileType.FDB, mFDB, mFDBenable, MachineProperty.FDB);
         addDiskMapping(FileType.SD, mSD, mSDenable, MachineProperty.SD);
@@ -1256,6 +1266,8 @@ public class LimboActivity extends AppCompatActivity
 
         //removables drives
         populateDiskAdapter(mCD, FileType.CDROM, false);
+        populateDiskAdapter(mCD2, FileType.CDROM2, false);
+        populateDiskAdapter(mCD3, FileType.CDROM3, false);
         populateDiskAdapter(mFDA, FileType.FDA, false);
         populateDiskAdapter(mFDB, FileType.FDB, false);
         populateDiskAdapter(mSD, FileType.SD, false);
@@ -1358,6 +1370,8 @@ public class LimboActivity extends AppCompatActivity
 
     private void unlockRemovableDevices(boolean flag) {
         mCDenable.setEnabled(flag);
+        mCD2enable.setEnabled(flag);
+        mCD3enable.setEnabled(flag);
         mFDAenable.setEnabled(flag);
         mFDBenable.setEnabled(flag);
         mSDenable.setEnabled(flag);
@@ -1370,6 +1384,8 @@ public class LimboActivity extends AppCompatActivity
 
     private void enableRemovableDiskValues(boolean flag) {
         mCD.setEnabled(flag && mCDenable.isChecked());
+        mCD2.setEnabled(flag && mCD2enable.isChecked());
+        mCD3.setEnabled(flag && mCD3enable.isChecked());
         mFDA.setEnabled(flag && mFDAenable.isChecked());
         mFDB.setEnabled(flag && mFDBenable.isChecked());
         mSD.setEnabled(flag && mSDenable.isChecked());
@@ -1612,6 +1628,8 @@ public class LimboActivity extends AppCompatActivity
 
         //Removable storage
         mCD = findViewById(R.id.cdromimgval);
+        mCD2 = findViewById(R.id.cdrom2imgval);
+        mCD3 = findViewById(R.id.cdrom3imgval);
         mFDA = findViewById(R.id.floppyimgval);
         mFDB = findViewById(R.id.floppybimgval);
         mCDOptions = findViewById(R.id.cdromoptions);
@@ -1627,6 +1645,8 @@ public class LimboActivity extends AppCompatActivity
             mSDCardLayout.setVisibility(View.GONE);
         }
         mCDenable = findViewById(R.id.cdromimgcheck);
+        mCD2enable = findViewById(R.id.cdrom2imgcheck);
+        mCD3enable = findViewById(R.id.cdrom3imgcheck);
         mFDAenable = findViewById(R.id.floppyimgcheck);
         mFDBenable = findViewById(R.id.floppybimgcheck);
         mSDenable = findViewById(R.id.sdcardimgcheck);
@@ -1903,7 +1923,9 @@ public class LimboActivity extends AppCompatActivity
         else {
             String text = null;
 
-            text = appendDriveFilename(getMachine().getCdImagePath(), text, "CDROM", true);
+            text = appendDriveFilename(getMachine().getCdImagePath(), text, "CD-ROM 1", true);
+            text = appendDriveFilename(getMachine().getCd2ImagePath(), text, "CD-ROM 2", true);
+            text = appendDriveFilename(getMachine().getCd3ImagePath(), text, "CD-ROM 3", true);
             text = appendDriveFilename(getMachine().getFdaImagePath(), text, "FDA", true);
             text = appendDriveFilename(getMachine().getFdbImagePath(), text, "FDB", true);
             text = appendDriveFilename(getMachine().getSdImagePath(), text, "SD", true);
@@ -2043,6 +2065,8 @@ public class LimboActivity extends AppCompatActivity
         mFDAenable.setChecked(getMachine().getFdaImagePath() != null);
         mFDBenable.setChecked(getMachine().getFdbImagePath() != null);
         mCDenable.setChecked(getMachine().getCdImagePath() != null);
+        mCD2enable.setChecked(getMachine().getCd2ImagePath() != null);
+        mCD3enable.setChecked(getMachine().getCd3ImagePath() != null);
         mSDenable.setChecked(getMachine().getSdImagePath() != null);
 
         changeStatus(MachineController.getInstance().getCurrStatus());
@@ -2081,8 +2105,10 @@ public class LimboActivity extends AppCompatActivity
         else
             mExtraParams.setText("");
 
-        // CDROM
+        // CD-ROM 1/2/3
         seMachineDriveValue(FileType.CDROM, getMachine().getCdImagePath());
+        seMachineDriveValue(FileType.CDROM2, getMachine().getCd2ImagePath());
+        seMachineDriveValue(FileType.CDROM3, getMachine().getCd3ImagePath());
 
         // Floppy
         seMachineDriveValue(FileType.FDA, getMachine().getFdaImagePath());
@@ -2101,7 +2127,9 @@ public class LimboActivity extends AppCompatActivity
         seMachineDriveValue(FileType.SHARED_DIR, getMachine().getSharedFolderPath());
 
         // Advance
-        SpinnerAdapter.setDiskAdapterValue(mBootDevices, getMachine().getBootDevice());
+        String bootDevice = getMachine().getBootDevice();
+        if ("CDROM".equals(bootDevice)) bootDevice = "CD-ROM 1";
+        SpinnerAdapter.setDiskAdapterValue(mBootDevices, bootDevice);
         SpinnerAdapter.setDiskAdapterValue(mNetConfig, getMachine().getNetwork());
         SpinnerAdapter.setDiskAdapterValue(mVGAConfig, getMachine().getVga());
         SpinnerAdapter.setDiskAdapterValue(mSoundCard, getMachine().getSoundCard());
@@ -2454,7 +2482,9 @@ public class LimboActivity extends AppCompatActivity
     private void populateBootDevices() {
         ArrayList<String> bootDevicesList = new ArrayList<>();
         bootDevicesList.add("Default");
-        bootDevicesList.add("CDROM");
+        bootDevicesList.add("CD-ROM 1");
+        bootDevicesList.add("CD-ROM 2");
+        bootDevicesList.add("CD-ROM 3");
         bootDevicesList.add("Hard Disk");
         if (Config.enableEmulatedFloppy)
             bootDevicesList.add("Floppy");
@@ -2765,6 +2795,8 @@ public class LimboActivity extends AppCompatActivity
         if (getMachine() != null) {
             disableRemovableDiskListeners();
             updateDrive(FileType.CDROM, getMachine().getCdImagePath());
+            updateDrive(FileType.CDROM2, getMachine().getCd2ImagePath());
+            updateDrive(FileType.CDROM3, getMachine().getCd3ImagePath());
             updateDrive(FileType.FDA, getMachine().getFdaImagePath());
             updateDrive(FileType.FDB, getMachine().getFdbImagePath());
             updateDrive(FileType.SD, getMachine().getSdImagePath());
