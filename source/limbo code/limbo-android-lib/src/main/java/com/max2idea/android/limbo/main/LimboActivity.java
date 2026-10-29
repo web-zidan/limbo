@@ -1184,30 +1184,45 @@ public class LimboActivity extends AppCompatActivity
         final String[] choices = new String[] {
                 "Otomatis (kompatibilitas)",
                 "Software / paling kompatibel",
-                "OpenGL guest GPU (belum tersedia di native build)",
-                "Vulkan guest GPU (belum tersedia di native build)"
+                "OpenGL guest GPU (VirGL; eksperimental)",
+                "Vulkan guest GPU (belum didukung QEMU 5.1)"
         };
         String backend = RuntimeOptions.getGraphicsBackend(this);
-        int selected = RuntimeOptions.GRAPHICS_SOFTWARE.equals(backend) ? 1 : 0;
+        int selected = RuntimeOptions.GRAPHICS_OPENGL.equals(backend) ? 2
+                : (RuntimeOptions.GRAPHICS_SOFTWARE.equals(backend) ? 1 : 0);
 
         new AlertDialog.Builder(this)
                 .setTitle("Backend grafis guest")
                 .setSingleChoiceItems(choices, selected, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        if (which == 2 || which == 3) {
-                            String message = "Opsi ini belum bisa diaktifkan dengan aman: konfigurasi native Limbo saat ini menonaktifkan QEMU OpenGL dan belum menautkan virglrenderer/rutabaga untuk rendering GPU di dalam guest. Mendeteksi OpenGL/Vulkan Android saja tidak cukup. Pilihan tidak diubah.";
+                        if (which == 3) {
                             new AlertDialog.Builder(LimboActivity.this)
-                                    .setTitle("Akselerasi guest belum terbangun")
-                                    .setMessage(message)
+                                    .setTitle("Vulkan belum tersedia")
+                                    .setMessage("Vulkan untuk GPU tamu membutuhkan backend virtio-gpu Venus/rutabaga dan QEMU yang lebih baru. Build Limbo ini masih menggunakan QEMU 5.1, jadi pilihan Vulkan tidak diaktifkan agar mesin virtual tidak gagal boot.")
                                     .setPositiveButton(android.R.string.ok, null)
                                     .show();
                             return;
                         }
-                        RuntimeOptions.setGraphicsBackend(LimboActivity.this,
-                                which == 1 ? RuntimeOptions.GRAPHICS_SOFTWARE : RuntimeOptions.GRAPHICS_AUTO);
-                        ToastUtils.toastShort(LimboActivity.this,
-                                which == 1 ? "Mode kompatibilitas dipilih." : "Backend otomatis dipilih.");
+
+                        String value = RuntimeOptions.GRAPHICS_AUTO;
+                        if (which == 1) value = RuntimeOptions.GRAPHICS_SOFTWARE;
+                        else if (which == 2) value = RuntimeOptions.GRAPHICS_OPENGL;
+
+                        if (!RuntimeOptions.isGuestGraphicsBackendBuilt(value)) {
+                            ToastUtils.toastShort(LimboActivity.this,
+                                    "Backend grafis ini belum tersedia di build native.");
+                            return;
+                        }
+
+                        RuntimeOptions.setGraphicsBackend(LimboActivity.this, value);
+                        if (which == 2) {
+                            ToastUtils.toastShort(LimboActivity.this,
+                                    "VirGL OpenGL dipilih. Linux guest perlu dukungan virtio-gpu/Mesa; performa belum dijamin.");
+                        } else {
+                            ToastUtils.toastShort(LimboActivity.this,
+                                    which == 1 ? "Mode software dipilih." : "Backend otomatis dipilih.");
+                        }
                         dialog.dismiss();
                     }
                 })
