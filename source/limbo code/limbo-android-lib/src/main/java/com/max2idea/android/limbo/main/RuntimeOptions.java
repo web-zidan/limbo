@@ -58,12 +58,14 @@ public final class RuntimeOptions {
     }
 
     /*
-     * This Limbo native configuration currently disables QEMU OpenGL and does
-     * not link virglrenderer/rutabaga. These modes must not be advertised as
-     * working guest-GPU acceleration until those native components are built.
+     * The stage-2 Android build links QEMU 5.1 against virglrenderer for
+     * OpenGL/VirGL guest acceleration. Vulkan is deliberately not exposed as
+     * working: QEMU 5.1 lacks the newer Venus/rutabaga virtio-gpu interface.
      */
     public static boolean isGuestGraphicsBackendBuilt(String backend) {
-        return GRAPHICS_AUTO.equals(backend) || GRAPHICS_SOFTWARE.equals(backend);
+        return GRAPHICS_AUTO.equals(backend)
+                || GRAPHICS_SOFTWARE.equals(backend)
+                || GRAPHICS_OPENGL.equals(backend);
     }
 
     public static int[] getHostCpuIds(Context context) {
