@@ -89,6 +89,18 @@ jobs:
           export PKG_CONFIG_PATH="$(dirname "$EPOXY_PC"):$INSTALL_PREFIX/lib/pkgconfig:$INSTALL_PREFIX/lib64/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
           git clone --filter=blob:none https://github.com/Container-On-Android/virglrenderer.git /tmp/virglrenderer
           git -C /tmp/virglrenderer checkout 30b31117cffe52f73d3520abe67c5a1c2f2ef3a0
+          # Android NDK's UAPI dma-buf header uses kernel-internal u64 in
+          # DMA_BUF_SET_NAME_B. Provide the UAPI-equivalent type for this build.
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("/tmp/virglrenderer/src/virgl_util.c")
+          source = path.read_text()
+          needle = "#ifdef HAVE_DMABUF_H\n#include <linux/dma-buf.h>"
+          replacement = "#ifdef HAVE_DMABUF_H\n#include <linux/types.h>\ntypedef __u64 u64;\n#include <linux/dma-buf.h>"
+          if needle not in source:
+              raise SystemExit("Could not apply Android dma-buf u64 compatibility patch")
+          path.write_text(source.replace(needle, replacement, 1))
+          PY
           sed -i "s|android-ndk-r28c|$ANDROID_SDK_ROOT/ndk/23.1.7779620|g" /tmp/virglrenderer/aarch64-android-api30.txt
           export PKG_CONFIG_PATH="$INSTALL_PREFIX/lib/pkgconfig:$INSTALL_PREFIX/lib64/pkgconfig:${PKG_CONFIG_PATH:-}"
           meson setup /tmp/virglrenderer/build /tmp/virglrenderer \
