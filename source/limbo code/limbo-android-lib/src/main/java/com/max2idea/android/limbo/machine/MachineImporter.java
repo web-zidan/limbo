@@ -124,6 +124,12 @@ public class MachineImporter {
                             case "CDROM":
                                 mach.setCdImagePath(machineAttr[i].replace("\"", ""));
                                 break;
+                            case "CDROM2":
+                                mach.setCd2ImagePath(machineAttr[i].replace("\"", ""));
+                                break;
+                            case "CDROM3":
+                                mach.setCd3ImagePath(machineAttr[i].replace("\"", ""));
+                                break;
                             case "FDA":
                                 mach.setFdaImagePath(machineAttr[i].replace("\"", ""));
                                 break;
