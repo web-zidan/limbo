@@ -234,6 +234,19 @@ jobs:
           if needle not in source:
               raise SystemExit("Could not patch QEMU configure's pkg-config path")
           path.write_text(source.replace(needle, replacement, 1))
+          build_mak = Path("android-qemu-build.mak")
+          source = build_mak.read_text()
+          if "virgl_libs=-L$(ANDROID_VIRGL_LIB_DIR) -lvirglrenderer -lepoxy" not in source:
+              source = source.replace(
+                  "pixmanlib=-lpixman-1\n",
+                  "pixmanlib=-lpixman-1\nvirgl_libs=-L$(ANDROID_VIRGL_LIB_DIR) -lvirglrenderer -lepoxy\n", 1)
+          if "$(virgl_libs)" not in source:
+              source = source.replace(
+                  "$(sdllibs) \\\n",
+                  "$(sdllibs) \\\n\t$(virgl_libs) \\\n", 1)
+          if "$(virgl_libs)" not in source:
+              raise SystemExit("Could not add VirGL/epoxy to Android QEMU linker rule")
+          build_mak.write_text(source)
           PY
           make limbo
       - name: Add bundled x86_64 OVMF firmware assets
