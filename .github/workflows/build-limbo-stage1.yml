@@ -187,6 +187,26 @@ jobs:
           # GNU Make recipes do not quote all paths. Build from a space-free copy.
           rm -rf /tmp/limbo-source
           cp -a "source/limbo code" /tmp/limbo-source
+          # QEMU 5.1's generic OpenGL probe enables its Linux GBM/dmabuf
+          # display backend on Android because epoxy exposes the MESA extension.
+          # Limbo uses SDL's current EGL/GLES context for VirGL, not GBM; disable
+          # only QEMU's optional dmabuf display path and guard its GBM-only header.
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path("/tmp/limbo-source/limbo-android-lib/src/main/jni/qemu")
+          configure = root / "configure"
+          source = configure.read_text()
+          if "opengl_dmabuf=yes" not in source:
+              raise SystemExit("QEMU 5.1 OpenGL dmabuf probe was not found")
+          configure.write_text(source.replace("opengl_dmabuf=yes", "opengl_dmabuf=no", 1))
+          header = root / "include/ui/egl-helpers.h"
+          source = header.read_text()
+          if "#include <gbm.h>" not in source:
+              raise SystemExit("QEMU EGL helper GBM include was not found")
+          header.write_text(source.replace(
+              "#include <gbm.h>",
+              "#ifdef CONFIG_OPENGL_DMABUF\n#include <gbm.h>\n#endif", 1))
+          PY
           cd /tmp/limbo-source/limbo-android-lib/src/main/jni
           # The legacy Limbo QEMU configure assumes a GCC-era cross pkg-config
           # executable. Supply a narrow wrapper that exposes only the two
