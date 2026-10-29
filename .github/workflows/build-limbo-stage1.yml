@@ -188,6 +188,33 @@ jobs:
           rm -rf /tmp/limbo-source
           cp -a "source/limbo code" /tmp/limbo-source
           cd /tmp/limbo-source/limbo-android-lib/src/main/jni
+          # The legacy Limbo QEMU configure assumes a GCC-era cross pkg-config
+          # executable. Supply a narrow wrapper that exposes only the two
+          # Android-built GL packages and keeps host libraries out of detection.
+          cat > /tmp/limbo-pkg-config <<'PKGCFG'
+          #!/usr/bin/env bash
+          for arg in "$@"; do
+            case "$arg" in
+              epoxy|virglrenderer)
+                export PKG_CONFIG_PATH="${ANDROID_VIRGL_LIB_DIR}/pkgconfig"
+                export PKG_CONFIG_LIBDIR="${ANDROID_VIRGL_LIB_DIR}/pkgconfig"
+                exec /usr/bin/pkg-config "$@"
+                ;;
+            esac
+          done
+          exit 1
+          PKGCFG
+          chmod +x /tmp/limbo-pkg-config
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("android-config/android-qemu-config.mak")
+          source = path.read_text()
+          needle = "\t./configure \\\n"
+          replacement = "\tPKG_CONFIG=/tmp/limbo-pkg-config ./configure \\\n"
+          if needle not in source:
+              raise SystemExit("Could not patch QEMU configure's pkg-config path")
+          path.write_text(source.replace(needle, replacement, 1))
+          PY
           make limbo
       - name: Add bundled x86_64 OVMF firmware assets
         shell: bash
