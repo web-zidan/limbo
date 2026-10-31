@@ -216,6 +216,69 @@ jobs:
               gpu.write_text(source.replace(needle, gl_replacement, 1))
           elif gl_replacement not in source:
               raise SystemExit("Could not enable the GLES VirGL renderer flag in QEMU")
+
+          # QEMU 5.1's SDL window bootstrap predates its newer GL path. For
+          # OpenGL mode, SDL must create an OpenGL-capable window and a primary
+          # GLES context before VirGL asks for a shared context. Its old code
+          # made a 2D SDL_Renderer instead, which is unreliable on Android.
+          sdl = root / "ui/sdl2.c"
+          source = sdl.read_text()
+          old_window = """    if (scon->hidden) {
+            flags |= SDL_WINDOW_HIDDEN;
+          }
+
+          scon->real_window = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED,
+                                               SDL_WINDOWPOS_UNDEFINED,
+                                               surface_width(scon->surface),
+                                               surface_height(scon->surface),
+                                               flags);
+          scon->real_renderer = SDL_CreateRenderer(scon->real_window, -1, 0);
+          if (scon->opengl) {
+              scon->winctx = SDL_GL_GetCurrentContext();
+          }"""
+          new_window = """    if (scon->hidden) {
+            flags |= SDL_WINDOW_HIDDEN;
+          }
+          if (scon->opengl) {
+              flags |= SDL_WINDOW_OPENGL;
+              if (scon->opts->gl == DISPLAYGL_MODE_ES) {
+                  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
+                                      SDL_GL_CONTEXT_PROFILE_ES);
+              }
+          }
+
+          scon->real_window = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED,
+                                               SDL_WINDOWPOS_UNDEFINED,
+                                               surface_width(scon->surface),
+                                               surface_height(scon->surface),
+                                               flags);
+          if (scon->opengl) {
+              scon->winctx = SDL_GL_CreateContext(scon->real_window);
+              SDL_GL_SetSwapInterval(0);
+          } else {
+              scon->real_renderer = SDL_CreateRenderer(scon->real_window, -1, 0);
+          }"""
+          if old_window in source:
+              source = source.replace(old_window, new_window, 1)
+          elif "flags |= SDL_WINDOW_OPENGL;" not in source or "SDL_GL_CreateContext(scon->real_window)" not in source:
+              raise SystemExit("Could not patch QEMU SDL OpenGL context bootstrap")
+          old_destroy = """    SDL_DestroyRenderer(scon->real_renderer);
+          scon->real_renderer = NULL;
+          SDL_DestroyWindow(scon->real_window);"""
+          new_destroy = """    if (scon->winctx) {
+              SDL_GL_DeleteContext(scon->winctx);
+              scon->winctx = NULL;
+          }
+          if (scon->real_renderer) {
+              SDL_DestroyRenderer(scon->real_renderer);
+              scon->real_renderer = NULL;
+          }
+          SDL_DestroyWindow(scon->real_window);"""
+          if old_destroy in source:
+              source = source.replace(old_destroy, new_destroy, 1)
+          elif "SDL_GL_DeleteContext(scon->winctx)" not in source:
+              raise SystemExit("Could not patch QEMU SDL OpenGL context cleanup")
+          sdl.write_text(source)
           PY
           cd /tmp/limbo-source/limbo-android-lib/src/main/jni
           # The legacy Limbo QEMU configure assumes a GCC-era cross pkg-config
