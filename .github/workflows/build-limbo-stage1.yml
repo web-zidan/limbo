@@ -236,7 +236,7 @@ jobs:
           path.write_text(source.replace(needle, replacement, 1))
           build_mak = Path("android-qemu-build.mak")
           source = build_mak.read_text()
-          if "virgl_libs=-L$(ANDROID_VIRGL_LIB_DIR) -lvirglrenderer -lepoxy" not in source:
+          if "virgl_libs=-Wl,--no-as-needed -L$(ANDROID_VIRGL_LIB_DIR) -lvirglrenderer -lepoxy" not in source:
               source = source.replace(
                   "pixmanlib=-lpixman-1\n",
                   "pixmanlib=-lpixman-1\nvirgl_libs=-L$(ANDROID_VIRGL_LIB_DIR) -lvirglrenderer -lepoxy\n", 1)
@@ -272,7 +272,11 @@ jobs:
           QEMU_LIB="/tmp/limbo-source/limbo-android-x86/src/main/jniLibs/arm64-v8a/libqemu-system-x86_64.so"
           test -s "$QEMU_LIB"
           NEEDED="$ANDROID_SDK_ROOT/ndk/23.1.7779620/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
-          "$NEEDED" -d "$QEMU_LIB" | grep -E 'libvirglrenderer\.so|libepoxy\.so'
+          # Print all direct ELF dependencies for diagnostics. Both renderer
+          # libraries must stay in DT_NEEDED so Android can load them at runtime.
+          "$NEEDED" -d "$QEMU_LIB" | tee "$RUNNER_TEMP/qemu-dynamic-dependencies.txt"
+          grep -Eq 'libvirglrenderer\\.so' "$RUNNER_TEMP/qemu-dynamic-dependencies.txt"
+          grep -Eq 'libepoxy\\.so' "$RUNNER_TEMP/qemu-dynamic-dependencies.txt"
       - name: Generate Gradle wrapper and build release APK
         shell: bash
         run: |
