@@ -225,22 +225,22 @@ jobs:
           source = sdl.read_text()
           # Insert the OpenGL window flag before SDL_CreateWindow. Use
           # explicit escaped newlines so YAML indentation cannot alter C spacing.
-          hidden_block = "    if (scon->hidden) {\\n        flags |= SDL_WINDOW_HIDDEN;\\n    }\\n"
-          gl_flags = hidden_block + "    if (scon->opengl) {\\n        flags |= SDL_WINDOW_OPENGL;\\n        if (scon->opts->gl == DISPLAYGL_MODE_ES) {\\n            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,\\n                                SDL_GL_CONTEXT_PROFILE_ES);\\n        }\\n    }\\n"
+          hidden_block = "    if (scon->hidden) {\n        flags |= SDL_WINDOW_HIDDEN;\n    }\n"
+          gl_flags = hidden_block + "    if (scon->opengl) {\n        flags |= SDL_WINDOW_OPENGL;\n        if (scon->opts->gl == DISPLAYGL_MODE_ES) {\n            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,\n                                SDL_GL_CONTEXT_PROFILE_ES);\n        }\n    }\n"
           if hidden_block in source and "flags |= SDL_WINDOW_OPENGL;" not in source:
               source = source.replace(hidden_block, gl_flags, 1)
           elif "flags |= SDL_WINDOW_OPENGL;" not in source:
               raise SystemExit("Could not add SDL_WINDOW_OPENGL to QEMU SDL window")
 
-          old_renderer = "    scon->real_renderer = SDL_CreateRenderer(scon->real_window, -1, 0);\\n    if (scon->opengl) {\\n        scon->winctx = SDL_GL_GetCurrentContext();\\n    }"
-          new_renderer = "    if (scon->opengl) {\\n        scon->winctx = SDL_GL_CreateContext(scon->real_window);\\n        SDL_GL_SetSwapInterval(0);\\n    } else {\\n        scon->real_renderer = SDL_CreateRenderer(scon->real_window, -1, 0);\\n    }"
+          old_renderer = "    scon->real_renderer = SDL_CreateRenderer(scon->real_window, -1, 0);\n    if (scon->opengl) {\n        scon->winctx = SDL_GL_GetCurrentContext();\n    }"
+          new_renderer = "    if (scon->opengl) {\n        scon->winctx = SDL_GL_CreateContext(scon->real_window);\n        SDL_GL_SetSwapInterval(0);\n    } else {\n        scon->real_renderer = SDL_CreateRenderer(scon->real_window, -1, 0);\n    }"
           if old_renderer in source:
               source = source.replace(old_renderer, new_renderer, 1)
           elif "SDL_GL_CreateContext(scon->real_window)" not in source:
               raise SystemExit("Could not create the primary SDL GLES context for QEMU")
 
-          old_destroy = "    SDL_DestroyRenderer(scon->real_renderer);\\n    scon->real_renderer = NULL;\\n    SDL_DestroyWindow(scon->real_window);"
-          new_destroy = "    if (scon->winctx) {\\n        SDL_GL_DeleteContext(scon->winctx);\\n        scon->winctx = NULL;\\n    }\\n    if (scon->real_renderer) {\\n        SDL_DestroyRenderer(scon->real_renderer);\\n        scon->real_renderer = NULL;\\n    }\\n    SDL_DestroyWindow(scon->real_window);"
+          old_destroy = "    SDL_DestroyRenderer(scon->real_renderer);\n    scon->real_renderer = NULL;\n    SDL_DestroyWindow(scon->real_window);"
+          new_destroy = "    if (scon->winctx) {\n        SDL_GL_DeleteContext(scon->winctx);\n        scon->winctx = NULL;\n    }\n    if (scon->real_renderer) {\n        SDL_DestroyRenderer(scon->real_renderer);\n        scon->real_renderer = NULL;\n    }\n    SDL_DestroyWindow(scon->real_window);"
           if old_destroy in source:
               source = source.replace(old_destroy, new_destroy, 1)
           elif "SDL_GL_DeleteContext(scon->winctx)" not in source:
