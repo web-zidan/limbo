@@ -480,9 +480,12 @@ private String getQemuLibrary() {
                 // and the virtio-vga-gl device. Do not also add the user's
                 // legacy -vga selection or QEMU will create conflicting GPUs.
                 paramsList.add("-display");
-                paramsList.add("sdl,gl=on");
+                // Android exposes OpenGL ES through SDL/EGL, not a desktop GL profile.
+                // QEMU shares SDL's current GLES context with the VirGL renderer.
+                paramsList.add("sdl,gl=es");
                 paramsList.add("-device");
-                paramsList.add("virtio-vga");
+                // Explicitly enable the virtio-gpu 3D/VirGL feature.
+                paramsList.add("virtio-vga,virgl=on");
                 Log.i(TAG, "Guest OpenGL enabled through QEMU VirGL renderer");
                 return;
             } else {
