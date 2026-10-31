@@ -250,11 +250,13 @@ jobs:
               source = source.replace(
                   "pixmanlib=-lpixman-1\n",
                   "pixmanlib=-lpixman-1\nvirgl_libs=-Wl,--no-as-needed -L$(ANDROID_VIRGL_LIB_DIR) -lvirglrenderer -lepoxy\n", 1)
-          if "$(virgl_libs)" not in source:
-              source = source.replace(
-                  "$(sdllibs) \\\n",
-                  "$(sdllibs) \\\n\t$(virgl_libs) \\\n", 1)
-          if "$(virgl_libs)" not in source:
+          link_anchor = "$(sdllibs) \\\n"
+          link_replacement = "$(sdllibs) \\\n\t$(virgl_libs) \\\n"
+          if link_replacement not in source:
+              if link_anchor not in source:
+                  raise SystemExit("Could not find SDL library line in Android QEMU linker rule")
+              source = source.replace(link_anchor, link_replacement, 1)
+          if link_replacement not in source:
               raise SystemExit("Could not add VirGL/epoxy to Android QEMU linker rule")
           build_mak.write_text(source)
           PY
