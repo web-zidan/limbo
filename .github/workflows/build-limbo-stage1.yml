@@ -206,6 +206,16 @@ jobs:
           header.write_text(source.replace(
               "#include <gbm.h>",
               "#ifdef CONFIG_OPENGL_DMABUF\n#include <gbm.h>\n#endif", 1))
+          # QEMU 5.1 must tell VirGL that SDL provides an OpenGL ES context.
+          # Keep USE_EGL unset: QEMU's SDL callback owns the window/context.
+          gpu = root / "hw/display/virtio-gpu-3d.c"
+          source = gpu.read_text()
+          needle = "virgl_renderer_init(g, 0, &virtio_gpu_3d_cbs);"
+          gl_replacement = "virgl_renderer_init(g, VIRGL_RENDERER_USE_GLES, &virtio_gpu_3d_cbs);"
+          if needle in source:
+              gpu.write_text(source.replace(needle, gl_replacement, 1))
+          elif gl_replacement not in source:
+              raise SystemExit("Could not enable the GLES VirGL renderer flag in QEMU")
           PY
           cd /tmp/limbo-source/limbo-android-lib/src/main/jni
           # The legacy Limbo QEMU configure assumes a GCC-era cross pkg-config
@@ -239,7 +249,7 @@ jobs:
           if "virgl_libs=-Wl,--no-as-needed -L$(ANDROID_VIRGL_LIB_DIR) -lvirglrenderer -lepoxy" not in source:
               source = source.replace(
                   "pixmanlib=-lpixman-1\n",
-                  "pixmanlib=-lpixman-1\nvirgl_libs=-L$(ANDROID_VIRGL_LIB_DIR) -lvirglrenderer -lepoxy\n", 1)
+                  "pixmanlib=-lpixman-1\nvirgl_libs=-Wl,--no-as-needed -L$(ANDROID_VIRGL_LIB_DIR) -lvirglrenderer -lepoxy\n", 1)
           if "$(virgl_libs)" not in source:
               source = source.replace(
                   "$(sdllibs) \\\n",
