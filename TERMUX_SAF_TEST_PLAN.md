@@ -15,6 +15,7 @@ The SAF result handler accepts valid `content://` URIs from document providers o
 5. Choose an ISO through the same provider and confirm Limbo opens it read-only.
 6. Repeat with Android's external-storage provider to check for regressions.
 7. Test a provider that grants only temporary access; confirm selection succeeds for the current grant and that no persistable-permission crash occurs.
+8. Import a BIOS or machine archive from a read-only SAF provider; confirm the app opens the URI in read-only mode and closes the descriptor after the stream is consumed.
 
 ## Shared Directory limitation
 
