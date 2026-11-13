@@ -108,7 +108,7 @@ jobs:
                   return uri.toString();
               }
           '''
-          pattern = re.compile(r"(?ms)^    public static String getFileUriFromIntent\\(Activity activity, Intent data, boolean write\\) \\{.*?^    \\}\\n")
+          pattern = re.compile(r"(?ms)^    public static String getFileUriFromIntent\(Activity activity, Intent data, boolean write\) \{.*?^    \}\n")
           found = list(pattern.finditer(s))
           if len(found) != 1:
               raise SystemExit(f"Expected exactly one SAF method, found {len(found)}; aborting.")
