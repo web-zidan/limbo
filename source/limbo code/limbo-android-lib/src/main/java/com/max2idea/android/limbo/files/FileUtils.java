@@ -143,9 +143,14 @@ public class FileUtils {
     public static InputStream getStreamFromFilePath(String filePath) throws FileNotFoundException {
         if (filePath.startsWith("content://")) {
             Uri uri = Uri.parse(filePath);
-            String mode = "rw";
-            ParcelFileDescriptor pfd = LimboApplication.getInstance().getContentResolver().openFileDescriptor(uri, mode);
-            return new FileInputStream(pfd.getFileDescriptor());
+            // This method is used for importing/reading files. Requesting "rw"
+            // unnecessarily rejects providers that correctly grant read-only access.
+            ParcelFileDescriptor pfd = LimboApplication.getInstance()
+                    .getContentResolver().openFileDescriptor(uri, "r");
+            if (pfd == null)
+                throw new FileNotFoundException("Provider returned no file descriptor for " + uri);
+            // Closing the stream also closes the ParcelFileDescriptor.
+            return new ParcelFileDescriptor.AutoCloseInputStream(pfd);
         } else {
             return new FileInputStream(filePath);
         }
