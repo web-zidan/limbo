@@ -1,0 +1,114 @@
+name: Build Limbo 6.0.1 with Termux SAF
+
+on:
+  push:
+    branches: [build-termux-saf]
+    paths:
+      - ".github/workflows/build-termux-saf.yml"
+      - "termux-saf/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "11"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build packages
+        run: sdkmanager "platforms;android-29" "build-tools;29.0.3"
+
+      - name: Set up Gradle 6.5 (compatible with Android Gradle Plugin 4.1.1)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "6.5"
+
+      - name: Download original Limbo APK from public Drive link
+        env:
+          DRIVE_FILE_ID: "1qUtSoaH0hdTLIrQo0PHeeW-KQh1jWhkQ"
+        run: |
+          set -euo pipefail
+          URL="https://drive.usercontent.google.com/download?id=${DRIVE_FILE_ID}&export=download&confirm=t"
+          curl --fail --location --retry 3 --retry-delay 2 "$URL" -o original-limbo.apk
+          file original-limbo.apk
+          unzip -tq original-limbo.apk
+          unzip -Z1 original-limbo.apk | grep -q '^lib/arm64-v8a/libqemu-system-x86_64.so$'
+
+      - name: Run patch regression tests
+        run: python3 -m unittest discover -s termux-saf -p "test_*.py" -v
+
+      - name: Clone source and apply SAF patch
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch v6.0.1-LimboEmulator https://github.com/limboemu/limbo.git limbo-source
+          python3 termux-saf/apply_termux_saf_patch.py limbo-source
+
+      - name: Prepare side-by-side app identity and native libraries
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("limbo-source/limbo-android-x86/build.gradle")
+          s = p.read_text()
+          old = 'applicationId "com.limbo.emu.main"'
+          new = 'applicationId "com.limbo.emu.main.termsaf"'
+          if new not in s:
+              if s.count(old) != 1:
+                  raise SystemExit("Cannot safely change Limbo applicationId")
+              p.write_text(s.replace(old, new, 1))
+          m = Path("limbo-source/limbo-android-x86/src/main/AndroidManifest.xml")
+          ms = m.read_text()
+          ms = ms.replace('android:label="Limbo x86 PC Emulator"',
+                          'android:label="Limbo x86 PC Emulator (Termux SAF)"', 1)
+          ms = ms.replace('android:label="Limbo x86"',
+                          'android:label="Limbo x86 (Termux SAF)"', 1)
+          m.write_text(ms)
+          PY
+
+          while IFS= read -r entry; do
+            abi="$(echo "$entry" | cut -d/ -f2)"
+            name="${entry##*/}"
+            if [[ "$name" == "libqemu-system-x86_64.so" ]]; then
+              dest="limbo-source/limbo-android-x86/src/main/jniLibs/$abi"
+            else
+              dest="limbo-source/limbo-android-lib/src/main/jniLibs/$abi"
+            fi
+            mkdir -p "$dest"
+            unzip -p original-limbo.apk "$entry" > "$dest/$name"
+          done < <(unzip -Z1 original-limbo.apk | grep -E '^lib/[^/]+/[^/]+\.so$')
+
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+            test -s "limbo-source/limbo-android-x86/src/main/jniLibs/$abi/libqemu-system-x86_64.so"
+          done
+
+      - name: Build debug APK
+        working-directory: limbo-source
+        run: |
+          set -euo pipefail
+          if [[ ! -f gradle/wrapper/gradle-wrapper.jar || ! -f gradlew ]]; then
+            gradle wrapper --gradle-version 6.5 --distribution-type bin
+          fi
+          chmod +x gradlew
+          ./gradlew --no-daemon :limbo-android-x86:assembleDebug
+          mkdir -p ../dist
+          cp limbo-android-x86/build/outputs/apk/debug/*.apk ../dist/limbo-6.0.1-x86-termux-saf.apk
+
+      - name: Upload installable APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: limbo-6.0.1-x86-termux-saf
+          path: dist/limbo-6.0.1-x86-termux-saf.apk
+          if-no-files-found: error
+          retention-days: 14
