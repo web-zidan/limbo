@@ -538,23 +538,37 @@ public class FileUtils {
             return null;
 
         Uri uri = data.getData();
-        DocumentFile pickedFile = DocumentFile.fromSingleUri(activity, uri);
-        String file = uri.toString();
-        if (!file.contains("com.android.externalstorage.documents")) {
+        if (uri == null || !"content".equalsIgnoreCase(uri.getScheme())) {
             showFileNotSupported(activity);
             return null;
         }
-        activity.grantUriPermission(activity.getPackageName(), uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        if (write)
-            activity.grantUriPermission(activity.getPackageName(), uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-        activity.grantUriPermission(activity.getPackageName(), uri, Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
 
-        int takeFlags = data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION;
-        if (write)
-            takeFlags = takeFlags | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+        // SAF providers are not limited to Android's external-storage provider.
+        // Termux and other document providers expose valid content:// URIs too.
+        int resultFlags = data.getFlags();
+        int grantFlags = resultFlags & (Intent.FLAG_GRANT_READ_URI_PERMISSION
+                | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        if ((grantFlags & Intent.FLAG_GRANT_READ_URI_PERMISSION) == 0) {
+            showFileNotSupported(activity);
+            return null;
+        }
 
-        activity.getContentResolver().takePersistableUriPermission(uri, takeFlags);
-        return file;
+        // Keep only permissions actually returned by the selected document provider.
+        try {
+            if ((resultFlags & Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) != 0
+                    && grantFlags != 0) {
+                activity.getContentResolver().takePersistableUriPermission(uri, grantFlags);
+            }
+        } catch (SecurityException | IllegalArgumentException e) {
+            // Some providers issue temporary grants only. The current activity can
+            // still use the returned URI while that grant remains active.
+            Log.w(TAG, "Could not persist SAF permission for " + uri, e);
+        }
+
+        if (write && (grantFlags & Intent.FLAG_GRANT_WRITE_URI_PERMISSION) == 0) {
+            Log.w(TAG, "Provider did not grant write access for " + uri);
+        }
+        return uri.toString();
     }
 
     public static String getDirPathFromIntent(Activity activity, Intent data) {
