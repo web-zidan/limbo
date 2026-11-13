@@ -18,17 +18,23 @@ jobs:
       - name: Checkout build repository
         uses: actions/checkout@v4
 
-      - name: Set up Java 11
+      - name: Set up Java 17 for current Android SDK tools
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "11"
+          java-version: "17"
 
       - name: Install Android SDK packages
         uses: android-actions/setup-android@v3
 
       - name: Install Android platform and build tools
         run: sdkmanager "platforms;android-29" "build-tools;29.0.3"
+
+      - name: Switch to Java 11 for legacy Android Gradle Plugin
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "11"
 
       - name: Install Gradle 7.0.2
         run: |
