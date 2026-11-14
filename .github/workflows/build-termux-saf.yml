@@ -1,24 +1,29 @@
-name: Build Limbo 6.0.1 with Termux SAF
+name: Build Limbo 6.0.1 with Termux SAF and Shared Directory
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [fix/termux-saf-uri-access]
     paths:
+      - "source/limbo code/**"
       - ".github/workflows/build-termux-saf.yml"
 
 permissions:
   contents: read
 
+concurrency:
+  group: termux-shared-dir-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
-      - name: Checkout build repository
+      - name: Checkout the modified repository branch
         uses: actions/checkout@v4
 
-      - name: Set up Java 17 for current Android SDK tools
+      - name: Set up Java 17 for Android SDK tools
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -29,7 +34,7 @@ jobs:
         with:
           packages: "platforms;android-29 build-tools;29.0.3"
 
-      - name: Switch to Java 11 for legacy Android Gradle Plugin
+      - name: Set up Java 11 for the legacy Android Gradle Plugin
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -41,7 +46,7 @@ jobs:
           unzip -q /tmp/gradle.zip -d /opt
           echo "/opt/gradle-7.0.2/bin" >> "$GITHUB_PATH"
 
-      - name: Download original Limbo APK from public Google Drive
+      - name: Download original Limbo APK for its prebuilt native libraries
         env:
           APK_URL: "https://drive.usercontent.google.com/download?id=1qUtSoaH0hdTLIrQo0PHeeW-KQh1jWhkQ&export=download&confirm=t&uuid=4ddadc2e-396c-4904-819e-70595828805c"
         run: |
@@ -51,162 +56,67 @@ jobs:
           import zipfile
           p = "/tmp/limbo-original.apk"
           if not zipfile.is_zipfile(p):
-              with open(p, "rb") as f:
-                  print(f.read(500).decode("utf-8", "replace"))
-              raise SystemExit("Google Drive did not return an APK/ZIP. Check link access.")
+              raise SystemExit("Native-library source download is not a valid APK.")
           with zipfile.ZipFile(p) as z:
-              names = z.namelist()
-              libs = [n for n in names if n.startswith("lib/") and n.endswith(".so")]
+              libs = [n for n in z.namelist() if n.startswith("lib/") and n.endswith(".so")]
               qemu = [n for n in libs if n.endswith("/libqemu-system-x86_64.so")]
-              print("APK bytes:", __import__("os").path.getsize(p))
-              print("Native libraries:", len(libs), "QEMU ABI libraries:", len(qemu))
               if len(qemu) != 4:
-                  raise SystemExit("Expected QEMU native library for all four ABIs.")
+                  raise SystemExit(f"Expected four QEMU ABI libraries, found {len(qemu)}.")
           PY
 
-      - name: Clone official Limbo v6.0.1 source
-        run: git clone --depth 1 --branch v6.0.1-LimboEmulator https://github.com/limboemu/limbo.git /tmp/limbo
-
-      - name: Apply Termux DocumentsProvider SAF patch
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          p = Path("/tmp/limbo/limbo-android-lib/src/main/java/com/max2idea/android/limbo/files/FileUtils.java")
-          s = p.read_text(encoding="utf-8")
-          method = '''    public static String getFileUriFromIntent(Activity activity, Intent data, boolean write) {
-                  if (data == null)
-                      return null;
-
-                  Uri uri = data.getData();
-                  if (uri == null || !"content".equalsIgnoreCase(uri.getScheme())) {
-                      showFileNotSupported(activity);
-                      return null;
-                  }
-
-                  // Accept document URIs from any Android SAF DocumentsProvider.
-                  int requestedModeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION;
-                  if (write)
-                      requestedModeFlags |= Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
-
-                  int grantedModeFlags = data.getFlags() & requestedModeFlags;
-                  if ((grantedModeFlags & Intent.FLAG_GRANT_READ_URI_PERMISSION) == 0) {
-                      showFileNotSupported(activity);
-                      return null;
-                  }
-
-                  if ((data.getFlags() & Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) != 0) {
-                      try {
-                          activity.getContentResolver().takePersistableUriPermission(uri, grantedModeFlags);
-                      } catch (SecurityException | IllegalArgumentException e) {
-                          Log.w(TAG, "Could not persist document permission for " + uri, e);
-                      }
-                  } else {
-                      Log.w(TAG, "Document provider did not grant persistable access for " + uri);
-                  }
-
-                  if (write && (grantedModeFlags & Intent.FLAG_GRANT_WRITE_URI_PERMISSION) == 0) {
-                      Log.w(TAG, "Document provider granted read-only access for " + uri
-                              + "; writable virtual disks may not be usable");
-                  }
-
-                  return uri.toString();
-              }
-          '''
-          pattern = re.compile(r"(?ms)^    public static String getFileUriFromIntent\(Activity activity, Intent data, boolean write\) \{.*?^    \}\n")
-          found = list(pattern.finditer(s))
-          if len(found) != 1:
-              raise SystemExit(f"Expected exactly one SAF method, found {len(found)}; aborting.")
-          if "com.android.externalstorage.documents" not in found[0].group(0):
-              raise SystemExit("Source no longer matches expected v6.0.1 method; refusing blind patch.")
-          s = pattern.sub(lambda _: method, s, count=1)
-          p.write_text(s, encoding="utf-8")
-          print("Patched", p)
-          PY
-
-      - name: Run SAF patch regression checks
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("/tmp/limbo/limbo-android-lib/src/main/java/com/max2idea/android/limbo/files/FileUtils.java")
-          s = p.read_text()
-          assert "com.android.externalstorage.documents" not in s
-          assert '"content".equalsIgnoreCase(uri.getScheme())' in s
-          assert "takePersistableUriPermission(uri, grantedModeFlags)" in s
-          assert "catch (SecurityException | IllegalArgumentException e)" in s
-          assert "return uri.toString();" in s
-          print("SAF source assertions passed.")
-          PY
-
-      - name: Use side-by-side application ID
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("/tmp/limbo/limbo-android-x86/build.gradle")
-          s = p.read_text()
-          old = 'applicationId "com.limbo.emu.main"'
-          new = 'applicationId "com.limbo.emu.main.termsaf"'
-          if new not in s:
-              if s.count(old) != 1:
-                  raise SystemExit("Could not safely identify applicationId.")
-              s = s.replace(old, new, 1)
-          p.write_text(s)
-          m = Path("/tmp/limbo/limbo-android-x86/src/main/AndroidManifest.xml")
-          t = m.read_text()
-          t = t.replace('android:label="Limbo x86 PC Emulator"', 'android:label="Limbo x86 PC Emulator (Termux SAF)"', 1)
-          m.write_text(t)
-          PY
-
-      - name: Reuse original APK native libraries
+      - name: Restore prebuilt native libraries into the checked-out source tree
+        working-directory: source/limbo code
         run: |
           python3 - <<'PY'
           from pathlib import Path
           from zipfile import ZipFile
-          src = Path("/tmp/limbo")
-          with ZipFile("/tmp/limbo-original.apk") as z:
-              entries = [n for n in z.namelist() if n.startswith("lib/") and n.endswith(".so")]
-              if not entries:
-                  raise SystemExit("No native libraries found in original APK.")
+          root = Path(".")
+          with ZipFile("/tmp/limbo-original.apk") as apk:
+              entries = [n for n in apk.namelist() if n.startswith("lib/") and n.endswith(".so")]
               for entry in entries:
                   _, abi, filename = entry.split("/", 2)
                   module = "limbo-android-x86" if filename == "libqemu-system-x86_64.so" else "limbo-android-lib"
-                  out = src / module / "src/main/jniLibs" / abi / filename
-                  out.parent.mkdir(parents=True, exist_ok=True)
-                  out.write_bytes(z.read(entry))
-              for abi in ("arm64-v8a", "armeabi-v7a", "x86", "x86_64"):
-                  q = src / "limbo-android-x86/src/main/jniLibs" / abi / "libqemu-system-x86_64.so"
-                  if not q.is_file() or q.stat().st_size == 0:
-                      raise SystemExit(f"Missing QEMU library for {abi}")
-          print("Native libraries copied from supplied APK.")
+                  target = root / module / "src/main/jniLibs" / abi / filename
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  target.write_bytes(apk.read(entry))
+          for abi in ("arm64-v8a", "armeabi-v7a", "x86", "x86_64"):
+              qemu = root / "limbo-android-x86/src/main/jniLibs" / abi / "libqemu-system-x86_64.so"
+              if not qemu.is_file() or qemu.stat().st_size == 0:
+                  raise SystemExit(f"Missing QEMU native library for {abi}")
+          print("Native libraries restored from the original APK.")
           PY
 
       - name: Ensure Gradle wrapper
-        working-directory: /tmp/limbo
+        working-directory: source/limbo code
         run: |
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ] || [ ! -f gradlew ]; then
             gradle wrapper --gradle-version 7.0.2 --distribution-type bin
           fi
           chmod +x gradlew
 
-      - name: Build debug APK
-        working-directory: /tmp/limbo
+      - name: Run Shared Directory policy unit tests
+        working-directory: source/limbo code
+        run: ./gradlew --no-daemon :limbo-android-lib:testDebugUnitTest
+
+      - name: Build modified x86 emulator APK
+        working-directory: source/limbo code
         run: ./gradlew --no-daemon :limbo-android-x86:assembleDebug
 
-      - name: Verify APK output
+      - name: Verify and stage APK
         run: |
           set -euo pipefail
-          APK="$(find /tmp/limbo/limbo-android-x86/build/outputs/apk/debug -maxdepth 1 -name '*.apk' -type f | head -n1)"
+          APK="$(find "source/limbo code/limbo-android-x86/build/outputs/apk/debug" -maxdepth 1 -name '*.apk' -type f | head -n1)"
           test -n "$APK"
           test -s "$APK"
           mkdir -p dist
-          cp "$APK" dist/limbo-6.0.1-x86-termux-saf.apk
-          sha256sum dist/limbo-6.0.1-x86-termux-saf.apk
+          cp "$APK" dist/limbo-6.0.1-termux-shared-directory-debug.apk
+          sha256sum dist/limbo-6.0.1-termux-shared-directory-debug.apk
           ls -lh dist/
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: limbo-6.0.1-x86-termux-saf
-          path: dist/limbo-6.0.1-x86-termux-saf.apk
+          name: limbo-6.0.1-termux-shared-directory-debug
+          path: dist/limbo-6.0.1-termux-shared-directory-debug.apk
           if-no-files-found: error
           retention-days: 14
