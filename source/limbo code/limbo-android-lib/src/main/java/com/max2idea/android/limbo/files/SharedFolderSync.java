@@ -178,26 +178,25 @@ public final class SharedFolderSync {
         String baselineHash = session.baseline.get(path);
         DocumentFile remote = findRemote(session.root, path);
 
-        if (baselineHash != null) {
-            if (localHash.equals(baselineHash))
-                return;
-            if (remote == null || remote.isDirectory()) {
-                session.conflicts++;
-                return;
-            }
-            if (!baselineHash.equals(hashDocument(context, remote))) {
-                session.conflicts++;
-                return;
-            }
+        String remoteHash = remote == null || remote.isDirectory()
+                ? null : hashDocument(context, remote);
+        SharedFolderSyncPolicy.Decision decision = SharedFolderSyncPolicy.evaluate(
+                baselineHash, localHash, remote != null, remoteHash);
+
+        if (decision == SharedFolderSyncPolicy.Decision.UNCHANGED)
+            return;
+        if (decision == SharedFolderSyncPolicy.Decision.CONFLICT) {
+            session.conflicts++;
+            Log.w(TAG, "Preserving conflict without overwriting source: " + path);
+            return;
+        }
+
+        if (decision == SharedFolderSyncPolicy.Decision.WRITE_BACK) {
             writeRemote(context, remote, local);
             session.copiedBack++;
             return;
         }
 
-        if (remote != null) {
-            session.conflicts++;
-            return;
-        }
         DocumentFile parent = findRemoteParent(session.root, path);
         if (parent == null)
             throw new IllegalStateException("Missing destination directory for " + path);
