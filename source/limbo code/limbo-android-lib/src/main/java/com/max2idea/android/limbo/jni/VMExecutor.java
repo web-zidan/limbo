@@ -27,6 +27,7 @@ import android.view.Gravity;
 
 import com.limbo.emu.lib.R;
 import com.max2idea.android.limbo.files.FileUtils;
+import com.max2idea.android.limbo.files.SharedFolderSync;
 import com.max2idea.android.limbo.machine.MachineAction;
 import com.max2idea.android.limbo.machine.MachineController;
 import com.max2idea.android.limbo.machine.MachineExecutor;
@@ -58,6 +59,7 @@ class VMExecutor extends MachineExecutor {
     private static final String fdbDeviceName = "floppy1";
     private static final String sdDeviceName = "sd0";
     private static int vm_width;
+    private static String sharedFolderRuntimePath;
     private static int vm_height;
     //TODO: make this a proper singleton but the views should not be able to access it
     private static VMExecutor mInstance;
@@ -542,7 +544,9 @@ private String getQemuLibrary() {
                 2, getMachine().getHdcInterface());
         addHardDisk(paramsList, getDriveFilePath(getMachine().getHddImagePath()),
                 3, getMachine().getHddInterface());
-        addSharedFolder(paramsList, getDriveFilePath(getMachine().getSharedFolderPath()));
+        String sharedPath = sharedFolderRuntimePath != null
+                ? sharedFolderRuntimePath : getDriveFilePath(getMachine().getSharedFolderPath());
+        addSharedFolder(paramsList, sharedPath);
     }
 
     public void addHardDisk(ArrayList<String> paramsList, String imagePath, int index, String hdInterface) {
@@ -726,8 +730,11 @@ private String getQemuLibrary() {
      */
     public String start() {
         String res = null;
+        Context context = LimboApplication.getInstance();
         try {
-            String[] params = prepareParams(LimboApplication.getInstance());
+            String configuredSharedPath = getMachine().getSharedFolderPath();
+            sharedFolderRuntimePath = SharedFolderSync.prepare(context, configuredSharedPath);
+            String[] params = prepareParams(context);
             printParams(params);
             // XXX: for VNC we need to resume manually after a reasonable amount of time
             if (getMachine().getPaused() == 1 && MachineController.getInstance().isVNCEnabled()) {
@@ -745,8 +752,14 @@ private String getQemuLibrary() {
                     libFilename, FileUtils.getNativeLibDir(LimboApplication.getInstance()) + "/" + libFilename,
                     Config.SDLHintScale, params);
         } catch (Exception ex) {
-            ToastUtils.toastLong(LimboApplication.getInstance(), ex.getMessage());
+            Log.e(TAG, "Could not prepare or run Shared Directory", ex);
+            ToastUtils.toastLong(context, ex.getMessage());
             return res;
+        } finally {
+            String syncResult = SharedFolderSync.finish(context);
+            sharedFolderRuntimePath = null;
+            if (syncResult != null)
+                ToastUtils.toastLong(context, syncResult);
         }
         return res;
     }
