@@ -108,7 +108,7 @@ public class LimboFileManager extends ListActivity {
 
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.LOLLIPOP // device is old
                 || LimboSettingsManager.getEnableLegacyFileManager(activity) // app configuration ASF is disallowed
-                || fileType == FileType.SHARED_DIR //TODO: allow sd card access for SHARED DIR (called from c-jni and create the readdir() dirent structs)
+                
         ) {
             LimboFileManager.promptLegacyStorageAccess(activity, fileType, requestCode, lastDir);
         } else { // we use Android ASF to open the file (sd card supported)
