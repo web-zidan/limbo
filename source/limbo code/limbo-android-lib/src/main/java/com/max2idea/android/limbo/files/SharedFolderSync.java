@@ -82,7 +82,7 @@ public final class SharedFolderSync {
 
     /** Must be called only after QEMU has fully exited. */
     public static synchronized String finish(Context context) {
-        Session session = activeSession;
+        final Session session = activeSession;
         activeSession = null;
         if (session == null)
             return null;
