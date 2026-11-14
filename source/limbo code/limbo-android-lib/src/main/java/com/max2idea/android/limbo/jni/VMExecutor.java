@@ -733,7 +733,8 @@ private String getQemuLibrary() {
         Context context = LimboApplication.getInstance();
         try {
             String configuredSharedPath = getMachine().getSharedFolderPath();
-            sharedFolderRuntimePath = SharedFolderSync.prepare(context, configuredSharedPath);
+            sharedFolderRuntimePath = Config.enableSharedFolder
+                    ? SharedFolderSync.prepare(context, configuredSharedPath) : null;
             String[] params = prepareParams(context);
             printParams(params);
             // XXX: for VNC we need to resume manually after a reasonable amount of time
