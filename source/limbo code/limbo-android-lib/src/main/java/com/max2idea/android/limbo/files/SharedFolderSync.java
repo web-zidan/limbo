@@ -137,6 +137,8 @@ public final class SharedFolderSync {
                 throw new IllegalStateException("Unsupported document name in Shared Directory");
             String path = prefix.isEmpty() ? name : prefix + "/" + name;
             File local = new File(localDir, name);
+            if (local.exists())
+                throw new IllegalStateException("Duplicate document name in Shared Directory: " + path);
             if (child.isDirectory()) {
                 if (!local.mkdir() && !local.isDirectory())
                     throw new IllegalStateException("Cannot create staging directory: " + path);
