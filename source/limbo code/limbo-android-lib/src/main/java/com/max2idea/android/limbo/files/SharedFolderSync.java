@@ -20,10 +20,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Copies a SAF tree to a POSIX directory for QEMU's vvfat backend, then copies
@@ -113,9 +111,13 @@ public final class SharedFolderSync {
 
         String result = "Shared Directory sync: " + session.copiedBack + " file(s) copied, "
                 + session.conflicts + " conflict(s), " + session.failures + " error(s).";
-        Log.i(TAG, result + " Staging retained at " + session.stage.getAbsolutePath());
-        if (session.conflicts == 0 && session.failures == 0)
+        if (session.conflicts == 0 && session.failures == 0) {
             deleteLocalTree(session.stage);
+            Log.i(TAG, result + " Staging cleaned up.");
+        } else {
+            result += " Recovery copy retained in app storage: " + session.stage.getAbsolutePath();
+            Log.w(TAG, result);
+        }
         return result;
     }
 
