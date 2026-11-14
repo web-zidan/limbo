@@ -145,14 +145,15 @@ public final class SharedFolderSync {
                 session.baseline.put(path, "D");
                 copySourceToStage(context, child, local, path, session, depth + 1);
             } else {
-                String sourceHash = hashDocument(context, child);
                 try (InputStream in = context.getContentResolver().openInputStream(child.getUri());
                      FileOutputStream out = new FileOutputStream(local)) {
                     if (in == null)
                         throw new IllegalStateException("Provider returned no input stream for " + path);
                     copy(in, out);
                 }
-                session.baseline.put(path, sourceHash);
+                // Hash the staged bytes, not a separate provider read, so the baseline
+                // always describes exactly what the guest receives.
+                session.baseline.put(path, hashFile(local));
             }
         }
     }
