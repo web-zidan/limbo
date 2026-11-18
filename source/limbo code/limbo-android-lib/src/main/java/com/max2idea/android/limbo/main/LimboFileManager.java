@@ -193,7 +193,8 @@ public class LimboFileManager extends ListActivity {
 
         intent.putExtra("android.content.extra.SHOW_ADVANCED", true);
 
-        intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
+        // Do not set EXTRA_LOCAL_ONLY here: this is a directory-tree SAF picker,
+        // and non-filesystem document providers (for example Termux) must remain visible.
 
         if (!isFileTypeDirectory(fileType)) {
             String[] fileMimeTypes = getFileMimeTypes(fileType);
