@@ -1,3 +1,4 @@
+# Build verification for the Termux SAF picker and shared-folder bridge.
 name: Build Limbo 6.0.1 with Termux SAF and Shared Directory
 
 on:
